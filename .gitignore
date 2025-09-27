@@ -1,0 +1,11 @@
+# Unity meta files
+*.meta
+
+# Visual Studio files
+*.csproj
+*.sln
+*.user
+
+# OS files
+.DS_Store
+Thumbs.db
