@@ -16,13 +16,12 @@ namespace MiningGame
         public Texture2D artistTilemap;
         
         [Header("Generation Settings")]
-        public int tileSize = 200; // Updated to match your 200px tiles
+        public int tileSize = 200; 
         public int artistColumns = 8; // Artist tilemap columns
         public int artistRows = 10; // Artist tilemap rows
         public bool generateComparisonImage = true;
         public bool showPatternLabels = true;
         public bool highlightMismatches = true;
-        public bool flipYAxis = false; // Option to flip Y coordinate
         
         [Header("Color Scheme")]
         public Color emptyColor = new Color(0.9f, 0.95f, 1f, 1f);
@@ -31,6 +30,22 @@ namespace MiningGame
         
         private Vector2 scrollPosition;
         private List<PatternMismatch> mismatches = new List<PatternMismatch>();
+        private string importPath = "";
+        
+        [System.Serializable]
+        private class PatternData
+        {
+            public int index;
+            public int col;
+            public int row;
+            public int[] pattern;
+        }
+        
+        [System.Serializable]
+        private class PatternArrayData
+        {
+            public List<PatternData> patterns;
+        }
         
         private struct PatternMismatch
         {
@@ -64,26 +79,46 @@ namespace MiningGame
             tileSize = EditorGUILayout.IntField("Tile Size (pixels)", tileSize);
             
             EditorGUILayout.Space();
-            flipYAxis = EditorGUILayout.Toggle("Flip Y Axis", flipYAxis);
             generateComparisonImage = EditorGUILayout.Toggle("Generate Comparison", generateComparisonImage);
             showPatternLabels = EditorGUILayout.Toggle("Show Pattern Labels", showPatternLabels);
             highlightMismatches = EditorGUILayout.Toggle("Highlight Mismatches", highlightMismatches);
             
             EditorGUILayout.Space();
+            EditorGUILayout.LabelField("Actions", EditorStyles.boldLabel);
             
             if (GUILayout.Button("Generate Comparison Grid"))
             {
                 GenerateComparisonGrid();
             }
             
-            if (GUILayout.Button("Export Pattern Array (JavaScript)"))
-            {
-                ExportPatternArray();
-            }
-            
             if (GUILayout.Button("Analyze Artist Tilemap"))
             {
                 AnalyzeArtistTilemap();
+            }
+            
+            EditorGUILayout.Space();
+            EditorGUILayout.LabelField("Pattern Array Import/Export", EditorStyles.boldLabel);
+            
+            if (GUILayout.Button("Export Pattern Array (JSON)"))
+            {
+                ExportPatternArrayJSON();
+            }
+            
+            EditorGUILayout.BeginHorizontal();
+            importPath = EditorGUILayout.TextField("Import File:", importPath);
+            if (GUILayout.Button("Browse", GUILayout.Width(60)))
+            {
+                string path = EditorUtility.OpenFilePanel("Select Pattern Array JSON", Application.dataPath, "json");
+                if (!string.IsNullOrEmpty(path))
+                {
+                    importPath = path;
+                }
+            }
+            EditorGUILayout.EndHorizontal();
+            
+            if (GUILayout.Button("Import Pattern Array (JSON)"))
+            {
+                ImportPatternArrayJSON();
             }
             
             // Show mismatches if any
@@ -131,14 +166,9 @@ namespace MiningGame
             for (int i = 0; i < patterns.Count && i < 80; i++)
             {
                 int col = i % artistColumns;
-                int row = i / artistColumns;
-                
-                if (flipYAxis)
-                {
-                    row = (artistRows - 1) - row;
-                }
-                
-                DrawPatternTile(texture, patterns[i], col * tileSize, row * tileSize, i);
+                int logicalRow = i / artistColumns;
+                int drawRow = artistRows - 1 - logicalRow;
+                DrawPatternTile(texture, patterns[i], col * tileSize, drawRow * tileSize, i);
             }
             
             // Draw divider
@@ -161,11 +191,8 @@ namespace MiningGame
                 {
                     int col = i % artistColumns;
                     int row = i / artistColumns;
-                    
-                    if (flipYAxis)
-                    {
-                        row = (artistRows - 1) - row;
-                    }
+
+                    int artistTextureRow = artistRows - 1 - logicalRow;
                     
                     // Copy tile from artist tilemap
                     for (int ty = 0; ty < tileSize; ty++)
@@ -175,7 +202,7 @@ namespace MiningGame
                             int srcX = col * tileSize + tx;
                             int srcY = row * tileSize + ty;
                             int dstX = artistColumns * tileSize + 10 + col * tileSize + tx;
-                            int dstY = row * tileSize + ty;
+                            int dstY = (artistRows - 1 - logicalRow) * tileSize + ty;
                             
                             if (srcX < artistWidth && srcY < artistHeight)
                             {
@@ -186,7 +213,7 @@ namespace MiningGame
                                 if (highlightMismatches && tx == tileSize/2 && ty == tileSize/2)
                                 {
                                     var expectedPattern = patterns[i];
-                                    var actualPattern = AnalyzeTilePattern(artistTilemap, col, row);
+                                    var actualPattern = AnalyzeTilePattern(artistTilemap, col, artistTextureRow);
                                     
                                     if (!PatternsMatch(expectedPattern, actualPattern))
                                     {
@@ -210,7 +237,7 @@ namespace MiningGame
             }
             
             texture.Apply();
-            SaveTexture(texture, "ComparisonGrid_Fixed");
+            SaveTexture(texture, "ComparisonGrid");
             
             if (mismatches.Count > 0)
             {
@@ -219,6 +246,126 @@ namespace MiningGame
             else
             {
                 Debug.Log("All patterns match correctly!");
+            }
+        }
+        
+        private void ExportPatternArrayJSON()
+        {
+            var patterns = GenerateAllPatterns();
+            var patternList = new List<PatternData>();
+            
+            for (int i = 0; i < patterns.Count && i < 80; i++)
+            {
+                var p = patterns[i];
+                patternList.Add(new PatternData
+                {
+                    index = i,
+                    col = i % artistColumns,
+                    row = i / artistColumns,
+                    pattern = new int[] { (int)p.topLeft, (int)p.topRight, (int)p.bottomLeft, (int)p.bottomRight }
+                });
+            }
+            
+            var data = new PatternArrayData { patterns = patternList };
+            string json = JsonUtility.ToJson(data, true);
+            
+            string path = EditorUtility.SaveFilePanel(
+                "Save Pattern Array JSON",
+                Application.dataPath,
+                "ArtistPatternArray",
+                "json"
+            );
+            
+            if (!string.IsNullOrEmpty(path))
+            {
+                File.WriteAllText(path, json);
+                AssetDatabase.Refresh();
+                Debug.Log($"Pattern array (JSON) exported to: {path}");
+                EditorUtility.DisplayDialog("Success", $"Pattern array exported successfully", "OK");
+            }
+        }
+        
+        private void ImportPatternArrayJSON()
+        {
+            if (string.IsNullOrEmpty(importPath))
+            {
+                EditorUtility.DisplayDialog("Error", "Please select a JSON file to import", "OK");
+                return;
+            }
+            
+            if (!File.Exists(importPath))
+            {
+                EditorUtility.DisplayDialog("Error", "File does not exist", "OK");
+                return;
+            }
+            
+            if (patternMapper == null)
+            {
+                EditorUtility.DisplayDialog("Error", "Please assign a Pattern Mapper to import into", "OK");
+                return;
+            }
+            
+            try
+            {
+                string jsonContent = File.ReadAllText(importPath);
+                var data = JsonUtility.FromJson<PatternArrayData>(jsonContent);
+                
+                if (data == null || data.patterns == null || data.patterns.Count == 0)
+                {
+                    EditorUtility.DisplayDialog("Error", "No patterns found in JSON file", "OK");
+                    return;
+                }
+                               
+                var newMappings = new List<PatternMapper.PatternMapping>();
+                foreach (var pattern in data.patterns)
+                {
+                    if (pattern.pattern != null && pattern.pattern.Length == 4)
+                    {
+                        var mapping = new PatternMapper.PatternMapping
+                        {
+                            topLeft = (TerrainType)pattern.pattern[0],
+                            topRight = (TerrainType)pattern.pattern[1],
+                            bottomLeft = (TerrainType)pattern.pattern[2],
+                            bottomRight = (TerrainType)pattern.pattern[3],
+                            artistColumn = pattern.col,
+                            artistRow = pattern.row
+                        };
+                        mapping.UpdateCalculatedValues();
+                        newMappings.Add(mapping);
+                    }
+                }
+
+                int appliedCount = patternMapper.SetMappings(newMappings);
+
+                Debug.Log($"Imported {appliedCount} pattern mappings from JSON into {patternMapper.name}");
+                EditorUtility.DisplayDialog("Success", $"Imported {appliedCount} patterns successfully", "OK");
+            }
+            catch (System.Exception e)
+            {
+                EditorUtility.DisplayDialog("Error", $"Failed to import JSON: {e.Message}", "OK");
+                Debug.LogError(e);
+            }
+        }
+        
+        private void AnalyzeArtistTilemap()
+        {
+            if (artistTilemap == null)
+            {
+                EditorUtility.DisplayDialog("Error", "Please assign Artist Tilemap", "OK");
+                return;
+            }
+            
+            Debug.Log($"Analyzing artist tilemap: {artistTilemap.width}x{artistTilemap.height}px");
+            Debug.Log($"Expected: {artistColumns * tileSize}x{artistRows * tileSize}px");
+            Debug.Log($"Tiles: {artistColumns}x{artistRows} = {artistColumns * artistRows} tiles");
+            
+            // Analyze each tile
+            for (int i = 0; i < 80; i++)
+            {
+                int col = i % artistColumns;
+                int row = i / artistColumns;
+                var pattern = AnalyzeTilePattern(artistTilemap, col, row);
+                Debug.Log($"Tile {i} ({col},{row}): {PatternToString(pattern)}");
             }
         }
         
@@ -291,63 +438,6 @@ namespace MiningGame
             }
         }
         
-        private void ExportPatternArray()
-        {
-            if (patternMapper == null)
-            {
-                EditorUtility.DisplayDialog("Error", "Please assign a Pattern Mapper", "OK");
-                return;
-            }
-            
-            var sb = new System.Text.StringBuilder();
-            sb.AppendLine("// Auto-generated pattern array for 80 tiles (8x10 layout)");
-            sb.AppendLine("// Each index maps to artist tilemap position");
-            sb.AppendLine("const ARTIST_TILE_PATTERNS = [");
-            
-            var patterns = GenerateAllPatterns();
-            for (int i = 0; i < patterns.Count && i < 80; i++)
-            {
-                var p = patterns[i];
-                int col = i % artistColumns;
-                int row = i / artistColumns;
-                
-                sb.AppendLine($"  {{ index: {i}, col: {col}, row: {row}, " +
-                    $"pattern: [{(int)p.topLeft}, {(int)p.topRight}, {(int)p.bottomLeft}, {(int)p.bottomRight}] }},");
-            }
-            
-            sb.AppendLine("];");
-            
-            string path = Path.Combine(Application.dataPath, "ArtistPatternArray.js");
-            File.WriteAllText(path, sb.ToString());
-            AssetDatabase.Refresh();
-            
-            Debug.Log($"Pattern array exported to: {path}");
-            EditorUtility.DisplayDialog("Success", $"Pattern array exported to:\n{path}", "OK");
-        }
-        
-        private void AnalyzeArtistTilemap()
-        {
-            if (artistTilemap == null)
-            {
-                EditorUtility.DisplayDialog("Error", "Please assign Artist Tilemap", "OK");
-                return;
-            }
-            
-            Debug.Log($"Analyzing artist tilemap: {artistTilemap.width}x{artistTilemap.height}px");
-            Debug.Log($"Expected: {artistColumns * tileSize}x{artistRows * tileSize}px");
-            Debug.Log($"Tiles: {artistColumns}x{artistRows} = {artistColumns * artistRows} tiles");
-            
-            // Analyze each tile
-            for (int i = 0; i < 80; i++)
-            {
-                int col = i % artistColumns;
-                int row = i / artistColumns;
-                var pattern = AnalyzeTilePattern(artistTilemap, col, row);
-                Debug.Log($"Tile {i} ({col},{row}): {PatternToString(pattern)}");
-            }
-        }
-        
-        // Rest of the helper methods remain the same...
         private void DrawPatternTile(Texture2D texture, PatternDefinition pattern, int startX, int startY, int index)
         {
             int halfSize = tileSize / 2;
@@ -365,8 +455,7 @@ namespace MiningGame
             // Draw index label
             if (showPatternLabels)
             {
-                // Would need proper text rendering here
-                // For now, just a colored indicator
+                // Simple index indicator
                 for (int y = 0; y < 20; y++)
                 {
                     for (int x = 0; x < 30; x++)
@@ -409,7 +498,6 @@ namespace MiningGame
             return patterns;
         }
         
-        // Other helper methods remain the same...
         private void FillQuadrant(Texture2D texture, int x, int y, int width, int height, Color color)
         {
             for (int dy = 0; dy < height; dy++)

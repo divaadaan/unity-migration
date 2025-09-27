@@ -13,8 +13,7 @@ namespace MiningGame
     public class PatternMapper : ScriptableObject
     {
         [System.Serializable]
-        public class PatternMapping
-        {
+        public class PatternMapping {
             [Header("Pattern Definition")]
             public TerrainType topLeft;
             public TerrainType topRight;
@@ -87,6 +86,7 @@ namespace MiningGame
         
         [Header("Pattern Mappings")]
         [SerializeField] private List<PatternMapping> mappings = new List<PatternMapping>();
+
         
         [Header("Reference Tilemaps")]
         [Tooltip("Artist's tilemap for visual reference")]
@@ -227,7 +227,7 @@ namespace MiningGame
             Debug.Log($"JavaScript mapping exported to: {path}");
         }
         
-        [ContextMenu("Validate All Mappings")]
+                [ContextMenu("Validate All Mappings")]
         public void ValidateAllMappings()
         {
             var usedArtistPositions = new HashSet<int>();
@@ -252,5 +252,17 @@ namespace MiningGame
             Debug.Log($"Validation complete. {mappings.Count} mappings checked.");
         }
 #endif
-    }
+
+#if UNITY_EDITOR
+        public int SetMappings(List<PatternMapping> newMappings)
+        {
+            mappings = newMappings ?? new List<PatternMapping>();
+            UpdateAllCalculatedValues();
+            EditorUtility.SetDirty(this);
+            AssetDatabase.SaveAssets();
+            return mappings.Count;
+        }
+#endif
+    } 
+
 }
