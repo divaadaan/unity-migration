@@ -143,111 +143,95 @@ namespace MiningGame
                 EditorUtility.DisplayDialog("Error", "Please assign Artist Tilemap", "OK");
                 return;
             }
-            
+
             mismatches.Clear();
-            
+
             // Create side-by-side comparison
-            var texture = new Texture2D(artistColumns * tileSize * 2 + 10, artistRows * tileSize, TextureFormat.RGBA32, false);
-            
-            // Fill with background
+            var texture = new Texture2D(
+                artistColumns * tileSize * 2 + 10,
+                artistRows * tileSize,
+                TextureFormat.RGBA32,
+                false
+            );
+
+            // Fill background
             var bgColor = new Color(0.9f, 0.9f, 0.9f, 1f);
-            for (int y = 0; y < texture.height; y++)
-            {
-                for (int x = 0; x < texture.width; x++)
-                {
-                    texture.SetPixel(x, y, bgColor);
-                }
-            }
-            
+            texture.SetPixels(Enumerable.Repeat(bgColor, texture.width * texture.height).ToArray());
+
             // Generate all patterns
             var patterns = GenerateAllPatterns();
-            
-            // Draw systematic tiles (left side)
+
+            // ---- Left side: systematic tiles ----
             for (int i = 0; i < patterns.Count && i < 80; i++)
             {
                 int col = i % artistColumns;
                 int logicalRow = i / artistColumns;
                 int drawRow = artistRows - 1 - logicalRow;
+
                 DrawPatternTile(texture, patterns[i], col * tileSize, drawRow * tileSize, i);
             }
-            
-            // Draw divider
-            for (int y = 0; y < texture.height; y++)
-            {
-                for (int x = 0; x < 10; x++)
-                {
-                    texture.SetPixel(artistColumns * tileSize + x, y, Color.red);
-                }
-            }
-            
-            // Copy artist tilemap (right side) and analyze
-            if (artistTilemap != null)
-            {
-                var artistPixels = artistTilemap.GetPixels();
-                int artistWidth = artistTilemap.width;
-                int artistHeight = artistTilemap.height;
-                
-                for (int i = 0; i < 80; i++)
-                {
-                    int col = i % artistColumns;
-                    int row = i / artistColumns;
 
-                    int artistTextureRow = artistRows - 1 - logicalRow;
-                    
-                    // Copy tile from artist tilemap
-                    for (int ty = 0; ty < tileSize; ty++)
+            // ---- Divider ----
+            int dividerX = artistColumns * tileSize;
+            Color[] dividerBlock = Enumerable.Repeat(Color.red, 10 * texture.height).ToArray();
+            texture.SetPixels(dividerX, 0, 10, texture.height, dividerBlock);
+
+            // ---- Right side: copy artist tiles ----
+            int artistWidth = artistTilemap.width;
+            int artistHeight = artistTilemap.height;
+
+            for (int i = 0; i < 80; i++)
+            {
+                int col = i % artistColumns;
+                int logicalRow = i / artistColumns;
+                int artistTextureRow = artistRows - 1 - logicalRow;
+
+                int srcX = col * tileSize;
+                int srcY = artistTextureRow * tileSize;
+                int dstX = artistColumns * tileSize + 10 + col * tileSize;
+                int dstY = artistTextureRow * tileSize;
+
+                if (srcX + tileSize <= artistWidth && srcY + tileSize <= artistHeight)
+                {
+                    // Copy tile block in one call
+                    Color[] block = artistTilemap.GetPixels(srcX, srcY, tileSize, tileSize);
+                    texture.SetPixels(dstX, dstY, tileSize, tileSize, block);
+
+                    if (highlightMismatches)
                     {
-                        for (int tx = 0; tx < tileSize; tx++)
+                        var expectedPattern = patterns[i];
+                        var actualPattern = AnalyzeTilePattern(artistTilemap, col, artistTextureRow);
+
+                        if (!PatternsMatch(expectedPattern, actualPattern))
                         {
-                            int srcX = col * tileSize + tx;
-                            int srcY = row * tileSize + ty;
-                            int dstX = artistColumns * tileSize + 10 + col * tileSize + tx;
-                            int dstY = (artistRows - 1 - logicalRow) * tileSize + ty;
-                            
-                            if (srcX < artistWidth && srcY < artistHeight)
+                            mismatches.Add(new PatternMismatch
                             {
-                                Color artistColor = artistPixels[srcY * artistWidth + srcX];
-                                texture.SetPixel(dstX, dstY, artistColor);
-                                
-                                // Analyze for mismatches
-                                if (highlightMismatches && tx == tileSize/2 && ty == tileSize/2)
-                                {
-                                    var expectedPattern = patterns[i];
-                                    var actualPattern = AnalyzeTilePattern(artistTilemap, col, artistTextureRow);
-                                    
-                                    if (!PatternsMatch(expectedPattern, actualPattern))
-                                    {
-                                        mismatches.Add(new PatternMismatch
-                                        {
-                                            index = i,
-                                            systematicPattern = PatternToString(expectedPattern),
-                                            artistPattern = PatternToString(actualPattern),
-                                            col = col,
-                                            row = row
-                                        });
-                                        
-                                        // Draw red border on mismatched tiles
-                                        DrawBorder(texture, dstX - tileSize/2, dstY - tileSize/2, tileSize, Color.red, 3);
-                                    }
-                                }
-                            }
+                                index = i,
+                                systematicPattern = PatternToString(expectedPattern),
+                                artistPattern = PatternToString(actualPattern),
+                                col = col,
+                                row = logicalRow
+                            });
+
+                            // Fast border draw (still batched)
+                            DrawBorder(texture, dstX, dstY, tileSize, Color.red, 3);
                         }
                     }
                 }
             }
-            
+
+            // ---- Single Apply here ----
             texture.Apply();
+
             SaveTexture(texture, "ComparisonGrid");
-            
+
             if (mismatches.Count > 0)
-            {
                 Debug.LogWarning($"Found {mismatches.Count} pattern mismatches!");
-            }
             else
-            {
                 Debug.Log("All patterns match correctly!");
-            }
         }
+
+
         
         private void ExportPatternArrayJSON()
         {
@@ -421,22 +405,29 @@ namespace MiningGame
         
         private void DrawBorder(Texture2D texture, int x, int y, int size, Color color, int thickness)
         {
-            for (int t = 0; t < thickness; t++)
-            {
-                // Top and bottom
-                for (int i = 0; i < size; i++)
-                {
-                    texture.SetPixel(x + i, y + t, color);
-                    texture.SetPixel(x + i, y + size - 1 - t, color);
-                }
-                // Left and right
-                for (int i = 0; i < size; i++)
-                {
-                    texture.SetPixel(x + t, y + i, color);
-                    texture.SetPixel(x + size - 1 - t, y + i, color);
-                }
-            }
+            int width = texture.width;
+            int height = texture.height;
+
+            int clampedX = Mathf.Clamp(x, 0, width - 1);
+            int clampedY = Mathf.Clamp(y, 0, height - 1);
+            int clampedSize = Mathf.Min(size, width - clampedX, height - clampedY);
+
+            var horiz = Enumerable.Repeat(color, clampedSize * thickness).ToArray();
+            var vert = Enumerable.Repeat(color, clampedSize * thickness).ToArray();
+            
+            //top
+            texture.SetPixels(clampedX, clampedY + clampedSize - thickness, clampedSize, thickness, horiz);
+
+            //bottom
+            texture.SetPixels(clampedX, clampedY, clampedSize, thickness, horiz);
+
+            // Left strip
+            texture.SetPixels(clampedX, clampedY, thickness, clampedSize, vert);
+
+            // Right strip
+            texture.SetPixels(clampedX + clampedSize - thickness, clampedY, thickness, clampedSize, vert);
         }
+
         
         private void DrawPatternTile(Texture2D texture, PatternDefinition pattern, int startX, int startY, int index)
         {
