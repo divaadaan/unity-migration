@@ -1,468 +1,154 @@
 using UnityEngine;
+using UnityEditor;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-#if UNITY_EDITOR
-using UnityEditor;
-#endif
 
 namespace MiningGame
 {
 #if UNITY_EDITOR
     public class PatternVerifier : EditorWindow
     {
-        [Header("References")]
-        public PatternMapper patternMapper;
-        public Texture2D artistTilemap;
+        // Core references
+        private PatternMapper patternMapper;
+        private Texture2D artistTilemap;
         
-        [Header("Generation Settings")]
-        public int tileSize = 200; 
-        public int artistColumns = 8; // Artist tilemap columns
-        public int artistRows = 10; // Artist tilemap rows
-        public bool generateComparisonImage = true;
-        public bool showPatternLabels = true;
-        public bool highlightMismatches = true;
+        // Settings
+        private int tileSize = 200;
+        private int columns = 8;
+        private int rows = 10;
         
-        [Header("Color Scheme")]
-        public Color emptyColor = new Color(0.9f, 0.95f, 1f, 1f);
-        public Color diggableColor = new Color(0.54f, 0.45f, 0.33f, 1f);
-        public Color undiggableColor = new Color(0.17f, 0.17f, 0.17f, 1f);
-        
-        private Vector2 scrollPosition;
-        private List<PatternMismatch> mismatches = new List<PatternMismatch>();
-        private string importPath = "";
-        
-        [System.Serializable]
-        private class PatternData
-        {
-            public int index;
-            public int col;
-            public int row;
-            public int[] pattern;
-        }
-        
-        [System.Serializable]
-        private class PatternArrayData
-        {
-            public List<PatternData> patterns;
-        }
-        
-        private struct PatternMismatch
-        {
-            public int index;
-            public string systematicPattern;
-            public string artistPattern;
-            public int col;
-            public int row;
-        }
+        // Results
+        private Texture2D comparisonTexture;
+        private List<string> errors = new List<string>();
         
         [MenuItem("Mining Game/Pattern Verifier")]
         public static void ShowWindow()
         {
-            GetWindow<PatternVerifier>("Pattern Verifier");
+            var window = GetWindow<PatternVerifier>("Pattern Verifier");
+            window.minSize = new Vector2(400, 500);
         }
         
         private void OnGUI()
         {
-            GUILayout.Label("Pattern Mapping Verifier", EditorStyles.boldLabel);
-            EditorGUILayout.HelpBox("Compares systematic tile generation with artist tilemap", MessageType.Info);
-            
+            EditorGUILayout.LabelField("Tile Pattern Verifier", EditorStyles.boldLabel);
             EditorGUILayout.Space();
             
+            // Input fields
             patternMapper = EditorGUILayout.ObjectField("Pattern Mapper", patternMapper, typeof(PatternMapper), false) as PatternMapper;
             artistTilemap = EditorGUILayout.ObjectField("Artist Tilemap", artistTilemap, typeof(Texture2D), false) as Texture2D;
             
             EditorGUILayout.Space();
-            EditorGUILayout.LabelField("Artist Tilemap Layout", EditorStyles.boldLabel);
-            artistColumns = EditorGUILayout.IntField("Columns", artistColumns);
-            artistRows = EditorGUILayout.IntField("Rows", artistRows);
-            tileSize = EditorGUILayout.IntField("Tile Size (pixels)", tileSize);
+            tileSize = EditorGUILayout.IntField("Tile Size (px)", tileSize);
+            columns = EditorGUILayout.IntField("Columns", columns);
+            rows = EditorGUILayout.IntField("Rows", rows);
             
             EditorGUILayout.Space();
-            generateComparisonImage = EditorGUILayout.Toggle("Generate Comparison", generateComparisonImage);
-            showPatternLabels = EditorGUILayout.Toggle("Show Pattern Labels", showPatternLabels);
-            highlightMismatches = EditorGUILayout.Toggle("Highlight Mismatches", highlightMismatches);
             
-            EditorGUILayout.Space();
-            EditorGUILayout.LabelField("Actions", EditorStyles.boldLabel);
-            
-            if (GUILayout.Button("Generate Comparison Grid"))
+            // Action buttons
+            if (GUILayout.Button("Generate Comparison", GUILayout.Height(30)))
             {
-                GenerateComparisonGrid();
+                GenerateComparison();
             }
             
-            if (GUILayout.Button("Analyze Artist Tilemap"))
+            if (comparisonTexture != null)
             {
-                AnalyzeArtistTilemap();
-            }
-            
-            EditorGUILayout.Space();
-            EditorGUILayout.LabelField("Pattern Array Import/Export", EditorStyles.boldLabel);
-            
-            if (GUILayout.Button("Export Pattern Array (JSON)"))
-            {
-                ExportPatternArrayJSON();
-            }
-            
-            EditorGUILayout.BeginHorizontal();
-            importPath = EditorGUILayout.TextField("Import File:", importPath);
-            if (GUILayout.Button("Browse", GUILayout.Width(60)))
-            {
-                string path = EditorUtility.OpenFilePanel("Select Pattern Array JSON", Application.dataPath, "json");
-                if (!string.IsNullOrEmpty(path))
+                if (GUILayout.Button("Save Comparison Image"))
                 {
-                    importPath = path;
+                    SaveTexture(comparisonTexture);
                 }
             }
-            EditorGUILayout.EndHorizontal();
             
-            if (GUILayout.Button("Import Pattern Array (JSON)"))
-            {
-                ImportPatternArrayJSON();
-            }
-            
-            // Show mismatches if any
-            if (mismatches.Count > 0)
+            // Display errors
+            if (errors.Count > 0)
             {
                 EditorGUILayout.Space();
-                EditorGUILayout.LabelField($"Found {mismatches.Count} mismatches:", EditorStyles.boldLabel);
-                scrollPosition = EditorGUILayout.BeginScrollView(scrollPosition, GUILayout.Height(200));
-                foreach (var mismatch in mismatches)
+                EditorGUILayout.LabelField($"Issues Found: {errors.Count}", EditorStyles.boldLabel);
+                
+                var scrollRect = GUILayoutUtility.GetRect(0, 150, GUILayout.ExpandWidth(true));
+                using (var scrollView = new EditorGUILayout.ScrollViewScope(Vector2.zero, GUILayout.Height(150)))
                 {
-                    EditorGUILayout.LabelField($"Index {mismatch.index} ({mismatch.col},{mismatch.row}): " +
-                        $"Expected {mismatch.systematicPattern} but got {mismatch.artistPattern}");
-                }
-                EditorGUILayout.EndScrollView();
-            }
-        }
-        
-        private void GenerateComparisonGrid()
-        {
-            if (artistTilemap == null)
-            {
-                EditorUtility.DisplayDialog("Error", "Please assign Artist Tilemap", "OK");
-                return;
-            }
-
-            mismatches.Clear();
-
-            // Create side-by-side comparison
-            var texture = new Texture2D(
-                artistColumns * tileSize * 2 + 10,
-                artistRows * tileSize,
-                TextureFormat.RGBA32,
-                false
-            );
-
-            // Fill background
-            var bgColor = new Color(0.9f, 0.9f, 0.9f, 1f);
-            texture.SetPixels(Enumerable.Repeat(bgColor, texture.width * texture.height).ToArray());
-
-            // Generate all patterns
-            var patterns = GenerateAllPatterns();
-
-            // ---- Left side: systematic tiles ----
-            for (int i = 0; i < patterns.Count && i < 80; i++)
-            {
-                int col = i % artistColumns;
-                int logicalRow = i / artistColumns;
-                int drawRow = artistRows - 1 - logicalRow;
-
-                DrawPatternTile(texture, patterns[i], col * tileSize, drawRow * tileSize, i);
-            }
-
-            // ---- Divider ----
-            int dividerX = artistColumns * tileSize;
-            Color[] dividerBlock = Enumerable.Repeat(Color.red, 10 * texture.height).ToArray();
-            texture.SetPixels(dividerX, 0, 10, texture.height, dividerBlock);
-
-            // ---- Right side: copy artist tiles ----
-            int artistWidth = artistTilemap.width;
-            int artistHeight = artistTilemap.height;
-
-            for (int i = 0; i < 80; i++)
-            {
-                int col = i % artistColumns;
-                int logicalRow = i / artistColumns;
-                int artistTextureRow = artistRows - 1 - logicalRow;
-
-                int srcX = col * tileSize;
-                int srcY = artistTextureRow * tileSize;
-                int dstX = artistColumns * tileSize + 10 + col * tileSize;
-                int dstY = artistTextureRow * tileSize;
-
-                if (srcX + tileSize <= artistWidth && srcY + tileSize <= artistHeight)
-                {
-                    // Copy tile block in one call
-                    Color[] block = artistTilemap.GetPixels(srcX, srcY, tileSize, tileSize);
-                    texture.SetPixels(dstX, dstY, tileSize, tileSize, block);
-
-                    if (highlightMismatches)
+                    foreach (var error in errors)
                     {
-                        var expectedPattern = patterns[i];
-                        var actualPattern = AnalyzeTilePattern(artistTilemap, col, artistTextureRow);
-
-                        if (!PatternsMatch(expectedPattern, actualPattern))
-                        {
-                            mismatches.Add(new PatternMismatch
-                            {
-                                index = i,
-                                systematicPattern = PatternToString(expectedPattern),
-                                artistPattern = PatternToString(actualPattern),
-                                col = col,
-                                row = logicalRow
-                            });
-
-                            // Fast border draw (still batched)
-                            DrawBorder(texture, dstX, dstY, tileSize, Color.red, 3);
-                        }
+                        EditorGUILayout.LabelField(error, EditorStyles.wordWrappedLabel);
                     }
                 }
             }
-
-            // ---- Single Apply here ----
-            texture.Apply();
-
-            SaveTexture(texture, "ComparisonGrid");
-
-            if (mismatches.Count > 0)
-                Debug.LogWarning($"Found {mismatches.Count} pattern mismatches!");
-            else
-                Debug.Log("All patterns match correctly!");
-        }
-
-
-        
-        private void ExportPatternArrayJSON()
-        {
-            var patterns = GenerateAllPatterns();
-            var patternList = new List<PatternData>();
             
-            for (int i = 0; i < patterns.Count && i < 80; i++)
+            // Display preview
+            if (comparisonTexture != null)
             {
-                var p = patterns[i];
-                patternList.Add(new PatternData
-                {
-                    index = i,
-                    col = i % artistColumns,
-                    row = i / artistColumns,
-                    pattern = new int[] { (int)p.topLeft, (int)p.topRight, (int)p.bottomLeft, (int)p.bottomRight }
-                });
-            }
-            
-            var data = new PatternArrayData { patterns = patternList };
-            string json = JsonUtility.ToJson(data, true);
-            
-            string path = EditorUtility.SaveFilePanel(
-                "Save Pattern Array JSON",
-                Application.dataPath,
-                "ArtistPatternArray",
-                "json"
-            );
-            
-            if (!string.IsNullOrEmpty(path))
-            {
-                File.WriteAllText(path, json);
-                AssetDatabase.Refresh();
-                Debug.Log($"Pattern array (JSON) exported to: {path}");
-                EditorUtility.DisplayDialog("Success", $"Pattern array exported successfully", "OK");
+                EditorGUILayout.Space();
+                EditorGUILayout.LabelField("Preview:", EditorStyles.boldLabel);
+                
+                var rect = GUILayoutUtility.GetRect(380, 200);
+                GUI.DrawTexture(rect, comparisonTexture, ScaleMode.ScaleToFit);
             }
         }
         
-        private void ImportPatternArrayJSON()
+        private void GenerateComparison()
         {
-            if (string.IsNullOrEmpty(importPath))
-            {
-                EditorUtility.DisplayDialog("Error", "Please select a JSON file to import", "OK");
-                return;
-            }
+            errors.Clear();
             
-            if (!File.Exists(importPath))
-            {
-                EditorUtility.DisplayDialog("Error", "File does not exist", "OK");
-                return;
-            }
-            
+            // Validation
             if (patternMapper == null)
             {
-                EditorUtility.DisplayDialog("Error", "Please assign a Pattern Mapper to import into", "OK");
+                errors.Add("ERROR: Pattern Mapper not assigned");
                 return;
             }
             
-            try
-            {
-                string jsonContent = File.ReadAllText(importPath);
-                var data = JsonUtility.FromJson<PatternArrayData>(jsonContent);
-                
-                if (data == null || data.patterns == null || data.patterns.Count == 0)
-                {
-                    EditorUtility.DisplayDialog("Error", "No patterns found in JSON file", "OK");
-                    return;
-                }
-                               
-                var newMappings = new List<PatternMapper.PatternMapping>();
-                foreach (var pattern in data.patterns)
-                {
-                    if (pattern.pattern != null && pattern.pattern.Length == 4)
-                    {
-                        var mapping = new PatternMapper.PatternMapping
-                        {
-                            topLeft = (TerrainType)pattern.pattern[0],
-                            topRight = (TerrainType)pattern.pattern[1],
-                            bottomLeft = (TerrainType)pattern.pattern[2],
-                            bottomRight = (TerrainType)pattern.pattern[3],
-                            artistColumn = pattern.col,
-                            artistRow = pattern.row
-                        };
-                        mapping.UpdateCalculatedValues();
-                        newMappings.Add(mapping);
-                    }
-                }
-
-                int appliedCount = patternMapper.SetMappings(newMappings);
-
-                Debug.Log($"Imported {appliedCount} pattern mappings from JSON into {patternMapper.name}");
-                EditorUtility.DisplayDialog("Success", $"Imported {appliedCount} patterns successfully", "OK");
-            }
-            catch (System.Exception e)
-            {
-                EditorUtility.DisplayDialog("Error", $"Failed to import JSON: {e.Message}", "OK");
-                Debug.LogError(e);
-            }
-        }
-        
-        private void AnalyzeArtistTilemap()
-        {
             if (artistTilemap == null)
             {
-                EditorUtility.DisplayDialog("Error", "Please assign Artist Tilemap", "OK");
+                errors.Add("ERROR: Artist Tilemap not assigned");
                 return;
             }
             
-            Debug.Log($"Analyzing artist tilemap: {artistTilemap.width}x{artistTilemap.height}px");
-            Debug.Log($"Expected: {artistColumns * tileSize}x{artistRows * tileSize}px");
-            Debug.Log($"Tiles: {artistColumns}x{artistRows} = {artistColumns * artistRows} tiles");
+            Debug.Log($"Starting comparison generation...");
+            Debug.Log($"Artist tilemap: {artistTilemap.width}x{artistTilemap.height}px");
+            Debug.Log($"Expected: {columns * tileSize}x{rows * tileSize}px");
             
-            // Analyze each tile
-            for (int i = 0; i < 80; i++)
-            {
-                int col = i % artistColumns;
-                int row = i / artistColumns;
-                var pattern = AnalyzeTilePattern(artistTilemap, col, row);
-                Debug.Log($"Tile {i} ({col},{row}): {PatternToString(pattern)}");
-            }
+            // Initialize pattern mapper
+            patternMapper.InitializeLookups();
+            
+            // Create texture (side by side with gap)
+            int gap = 20;
+            int width = columns * tileSize * 2 + gap;
+            int height = rows * tileSize;
+            
+            comparisonTexture = new Texture2D(width, height, TextureFormat.RGBA32, false);
+            comparisonTexture.filterMode = FilterMode.Point;
+            
+            // Fill background
+            var bgColor = new Color(0.2f, 0.2f, 0.2f, 1f);
+            var pixels = new Color[width * height];
+            for (int i = 0; i < pixels.Length; i++)
+                pixels[i] = bgColor;
+            comparisonTexture.SetPixels(pixels);
+            
+            // Generate all 80 patterns (excluding all-empty)
+            var patterns = GenerateAllPatterns();
+            
+            Debug.Log($"Generated {patterns.Count} patterns to verify");
+            
+            // Draw systematic tiles on the left
+            DrawSystematicTiles(patterns);
+            
+            // Draw corresponding artist tiles on the right
+            DrawArtistTiles(patterns);
+            
+            // Draw divider
+            DrawDivider(gap);
+            
+            // Apply changes
+            comparisonTexture.Apply();
+            
+            Debug.Log($"Comparison complete. {errors.Count} issues found.");
         }
         
-        private PatternDefinition AnalyzeTilePattern(Texture2D tilemap, int tileCol, int tileRow)
+        private List<Pattern> GenerateAllPatterns()
         {
-            // Sample the four quadrants of a tile to determine its pattern
-            var pixels = tilemap.GetPixels(
-                tileCol * tileSize, 
-                tileRow * tileSize, 
-                tileSize, 
-                tileSize
-            );
-            
-            int quarter = tileSize / 4;
-            int half = tileSize / 2;
-            
-            // Sample center of each quadrant
-            var tl = ClassifyPixel(pixels[quarter * tileSize + quarter]);
-            var tr = ClassifyPixel(pixels[quarter * tileSize + (half + quarter)]);
-            var bl = ClassifyPixel(pixels[(half + quarter) * tileSize + quarter]);
-            var br = ClassifyPixel(pixels[(half + quarter) * tileSize + (half + quarter)]);
-            
-            return new PatternDefinition { topLeft = tl, topRight = tr, bottomLeft = bl, bottomRight = br };
-        }
-        
-        private TerrainType ClassifyPixel(Color pixel)
-        {
-            // Classify based on your artist's color scheme
-            // White/light = empty
-            if (pixel.r > 0.8f && pixel.g > 0.8f && pixel.b > 0.8f)
-                return TerrainType.Empty;
-            
-            // Blue = diggable
-            if (pixel.b > pixel.r && pixel.b > pixel.g)
-                return TerrainType.Diggable;
-            
-            // Black/red = undiggable
-            return TerrainType.Undiggable;
-        }
-        
-        private bool PatternsMatch(PatternDefinition a, PatternDefinition b)
-        {
-            return a.topLeft == b.topLeft && 
-                   a.topRight == b.topRight && 
-                   a.bottomLeft == b.bottomLeft && 
-                   a.bottomRight == b.bottomRight;
-        }
-        
-        private string PatternToString(PatternDefinition p)
-        {
-            return $"({(int)p.topLeft},{(int)p.topRight},{(int)p.bottomLeft},{(int)p.bottomRight})";
-        }
-        
-        private void DrawBorder(Texture2D texture, int x, int y, int size, Color color, int thickness)
-        {
-            int width = texture.width;
-            int height = texture.height;
-
-            int clampedX = Mathf.Clamp(x, 0, width - 1);
-            int clampedY = Mathf.Clamp(y, 0, height - 1);
-            int clampedSize = Mathf.Min(size, width - clampedX, height - clampedY);
-
-            var horiz = Enumerable.Repeat(color, clampedSize * thickness).ToArray();
-            var vert = Enumerable.Repeat(color, clampedSize * thickness).ToArray();
-            
-            //top
-            texture.SetPixels(clampedX, clampedY + clampedSize - thickness, clampedSize, thickness, horiz);
-
-            //bottom
-            texture.SetPixels(clampedX, clampedY, clampedSize, thickness, horiz);
-
-            // Left strip
-            texture.SetPixels(clampedX, clampedY, thickness, clampedSize, vert);
-
-            // Right strip
-            texture.SetPixels(clampedX + clampedSize - thickness, clampedY, thickness, clampedSize, vert);
-        }
-
-        
-        private void DrawPatternTile(Texture2D texture, PatternDefinition pattern, int startX, int startY, int index)
-        {
-            int halfSize = tileSize / 2;
-            
-            // Draw quadrants
-            FillQuadrant(texture, startX, startY, halfSize, halfSize, GetColorForTerrain(pattern.topLeft));
-            FillQuadrant(texture, startX + halfSize, startY, halfSize, halfSize, GetColorForTerrain(pattern.topRight));
-            FillQuadrant(texture, startX, startY + halfSize, halfSize, halfSize, GetColorForTerrain(pattern.bottomLeft));
-            FillQuadrant(texture, startX + halfSize, startY + halfSize, halfSize, halfSize, GetColorForTerrain(pattern.bottomRight));
-            
-            // Draw dividers
-            DrawLine(texture, startX + halfSize, startY, startX + halfSize, startY + tileSize, new Color(0.3f, 0.3f, 0.3f, 0.5f));
-            DrawLine(texture, startX, startY + halfSize, startX + tileSize, startY + halfSize, new Color(0.3f, 0.3f, 0.3f, 0.5f));
-            
-            // Draw index label
-            if (showPatternLabels)
-            {
-                // Simple index indicator
-                for (int y = 0; y < 20; y++)
-                {
-                    for (int x = 0; x < 30; x++)
-                    {
-                        if (startX + x < texture.width && startY + y < texture.height)
-                        {
-                            texture.SetPixel(startX + x + 5, startY + y + 5, new Color(1, 1, 1, 0.8f));
-                        }
-                    }
-                }
-            }
-        }
-        
-        private List<PatternDefinition> GenerateAllPatterns()
-        {
-            var patterns = new List<PatternDefinition>();
+            var patterns = new List<Pattern>();
+            int index = 0;
             
             for (int tl = 0; tl <= 2; tl++)
             {
@@ -472,14 +158,17 @@ namespace MiningGame
                     {
                         for (int br = 0; br <= 2; br++)
                         {
-                            if (tl == 0 && tr == 0 && bl == 0 && br == 0) continue;
+                            // Skip all-empty
+                            if (tl == 0 && tr == 0 && bl == 0 && br == 0)
+                                continue;
                             
-                            patterns.Add(new PatternDefinition
+                            patterns.Add(new Pattern
                             {
-                                topLeft = (TerrainType)tl,
-                                topRight = (TerrainType)tr,
-                                bottomLeft = (TerrainType)bl,
-                                bottomRight = (TerrainType)br
+                                index = index++,
+                                tl = (TerrainType)tl,
+                                tr = (TerrainType)tr,
+                                bl = (TerrainType)bl,
+                                br = (TerrainType)br
                             });
                         }
                     }
@@ -489,66 +178,207 @@ namespace MiningGame
             return patterns;
         }
         
-        private void FillQuadrant(Texture2D texture, int x, int y, int width, int height, Color color)
+        private void DrawSystematicTiles(List<Pattern> patterns)
         {
-            for (int dy = 0; dy < height; dy++)
+            Debug.Log("Drawing systematic tiles...");
+    
+            for (int i = 0; i < patterns.Count && i < 80; i++)
             {
-                for (int dx = 0; dx < width; dx++)
+                var pattern = patterns[i];
+                int col = i % columns;
+                int row = i / columns;
+        
+                int x = col * tileSize;
+                int y = row * tileSize;  // Row 0 at bottom, increasing upward
+        
+                DrawSystematicTile(x, y, pattern);
+            }
+        }
+        
+        private void DrawSystematicTile(int x, int y, Pattern pattern)
+        {
+            int half = tileSize / 2;
+            
+            // Colors for each terrain type
+            var colors = new Dictionary<TerrainType, Color>
+            {
+                { TerrainType.Empty, new Color(0.95f, 0.95f, 0.95f, 1f) },
+                { TerrainType.Diggable, new Color(0.4f, 0.6f, 1f, 1f) },  // Blue
+                { TerrainType.Undiggable, new Color(0.8f, 0.2f, 0.2f, 1f) } // Red
+            };
+            
+            // Draw quadrants
+            DrawQuadrant(x, y + half, half, colors[pattern.tl]); // Top-left
+            DrawQuadrant(x + half, y + half, half, colors[pattern.tr]); // Top-right
+            DrawQuadrant(x, y, half, colors[pattern.bl]); // Bottom-left
+            DrawQuadrant(x + half, y, half, colors[pattern.br]); // Bottom-right
+            
+            // Draw grid lines
+            DrawLine(x + half, y, x + half, y + tileSize, Color.black, 2);
+            DrawLine(x, y + half, x + tileSize, y + half, Color.black, 2);
+            DrawBorder(x, y, tileSize, Color.black, 2);
+            
+            // Add index label
+            DrawLabel(x + 5, y + tileSize - 20, pattern.index.ToString());
+        }
+        
+        private void DrawArtistTiles(List<Pattern> patterns)
+        {
+            Debug.Log("Drawing artist tiles...");
+    
+            int xOffset = columns * tileSize + 20; // Right side offset
+    
+            for (int i = 0; i < patterns.Count && i < 80; i++)
+            {
+                var pattern = patterns[i];
+        
+                // Get artist tile position from mapper (this is our source of truth)
+                var (artistCol, artistRow) = patternMapper.GetArtistPosition(
+                    pattern.tl, pattern.tr, pattern.bl, pattern.br
+                );
+        
+                // Display position (where it should appear in grid)
+                int displayCol = i % columns;
+                int displayRow = i / columns;
+                int displayX = xOffset + displayCol * tileSize;
+                int displayY = displayRow * tileSize;
+        
+                // Source position in artist tilemap
+                int sourceX = artistCol * tileSize;
+                int sourceY = artistRow * tileSize;
+        
+                // Validate source position is within bounds
+                if (sourceX < 0 || sourceY < 0 || 
+                    sourceX + tileSize > artistTilemap.width || 
+                    sourceY + tileSize > artistTilemap.height)
                 {
-                    if (x + dx < texture.width && y + dy < texture.height)
+                    errors.Add($"Pattern {i} ({pattern.tl},{pattern.tr},{pattern.bl},{pattern.br}): " +
+                              $"Artist position ({artistCol},{artistRow}) is out of bounds");
+                    DrawErrorTile(displayX, displayY);
+                    continue;
+                }
+        
+                // Copy artist tile - no verification needed, we trust the mapping
+                try
+                {
+                    var tilePixels = artistTilemap.GetPixels(sourceX, sourceY, tileSize, tileSize);
+                    comparisonTexture.SetPixels(displayX, displayY, tileSize, tileSize, tilePixels);
+            
+                    // Optional: Add subtle border to match left side
+                    DrawBorder(displayX, displayY, tileSize, new Color(0.3f, 0.3f, 0.3f, 1f), 1);
+                }
+                catch (System.Exception e)
+                {
+                    errors.Add($"Pattern {i}: Failed to copy tile - {e.Message}");
+                    DrawErrorTile(displayX, displayY);
+                }
+            }
+        }
+        
+        private void DrawQuadrant(int x, int y, int size, Color color)
+        {
+            var pixels = new Color[size * size];
+            for (int i = 0; i < pixels.Length; i++)
+                pixels[i] = color;
+            comparisonTexture.SetPixels(x, y, size, size, pixels);
+        }
+        
+        private void DrawErrorTile(int x, int y)
+        {
+            var pixels = new Color[tileSize * tileSize];
+            var errorColor = new Color(1f, 0f, 1f, 1f); // Magenta
+            for (int i = 0; i < pixels.Length; i++)
+                pixels[i] = errorColor;
+            comparisonTexture.SetPixels(x, y, tileSize, tileSize, pixels);
+        }
+        
+        private void DrawLine(int x1, int y1, int x2, int y2, Color color, int thickness)
+        {
+            // Simple line drawing (vertical or horizontal only)
+            if (x1 == x2) // Vertical
+            {
+                for (int t = 0; t < thickness; t++)
+                {
+                    for (int y = Mathf.Min(y1, y2); y <= Mathf.Max(y1, y2); y++)
                     {
-                        texture.SetPixel(x + dx, y + dy, color);
+                        if (x1 + t - thickness/2 >= 0 && x1 + t - thickness/2 < comparisonTexture.width && 
+                            y >= 0 && y < comparisonTexture.height)
+                            comparisonTexture.SetPixel(x1 + t - thickness/2, y, color);
+                    }
+                }
+            }
+            else if (y1 == y2) // Horizontal
+            {
+                for (int t = 0; t < thickness; t++)
+                {
+                    for (int x = Mathf.Min(x1, x2); x <= Mathf.Max(x1, x2); x++)
+                    {
+                        if (x >= 0 && x < comparisonTexture.width && 
+                            y1 + t - thickness/2 >= 0 && y1 + t - thickness/2 < comparisonTexture.height)
+                            comparisonTexture.SetPixel(x, y1 + t - thickness/2, color);
                     }
                 }
             }
         }
         
-        private void DrawLine(Texture2D texture, int x1, int y1, int x2, int y2, Color color)
+        private void DrawBorder(int x, int y, int size, Color color, int thickness)
         {
-            if (x1 == x2) // Vertical
+            DrawLine(x, y, x + size, y, color, thickness);
+            DrawLine(x, y + size, x + size, y + size, color, thickness);
+            DrawLine(x, y, x, y + size, color, thickness);
+            DrawLine(x + size, y, x + size, y + size, color, thickness);
+        }
+        
+        private void DrawDivider(int gap)
+        {
+            int x = columns * tileSize;
+            var dividerColor = new Color(0.5f, 0.5f, 0.5f, 1f);
+            
+            for (int dx = 0; dx < gap; dx++)
             {
-                for (int y = Mathf.Min(y1, y2); y <= Mathf.Max(y1, y2); y++)
+                for (int y = 0; y < comparisonTexture.height; y++)
                 {
-                    if (x1 < texture.width && y < texture.height)
-                        texture.SetPixel(x1, y, color);
+                    comparisonTexture.SetPixel(x + dx, y, dividerColor);
                 }
             }
-            else if (y1 == y2) // Horizontal
+        }
+        
+        private void DrawLabel(int x, int y, string text)
+        {
+            // Simple text placeholder - draws a small white rectangle
+            var labelColor = Color.white;
+            for (int dx = 0; dx < 20; dx++)
             {
-                for (int x = Mathf.Min(x1, x2); x <= Mathf.Max(x1, x2); x++)
+                for (int dy = 0; dy < 15; dy++)
                 {
-                    if (x < texture.width && y1 < texture.height)
-                        texture.SetPixel(x, y1, color);
+                    if (x + dx < comparisonTexture.width && y + dy < comparisonTexture.height)
+                        comparisonTexture.SetPixel(x + dx, y + dy, labelColor);
                 }
             }
         }
         
-        private Color GetColorForTerrain(TerrainType terrain)
+        private void SaveTexture(Texture2D texture)
         {
-            switch (terrain)
+            string path = EditorUtility.SaveFilePanel(
+                "Save Comparison Image",
+                Application.dataPath,
+                "TileComparison",
+                "png"
+            );
+            
+            if (!string.IsNullOrEmpty(path))
             {
-                case TerrainType.Empty: return emptyColor;
-                case TerrainType.Diggable: return diggableColor;
-                case TerrainType.Undiggable: return undiggableColor;
-                default: return Color.magenta;
+                byte[] bytes = texture.EncodeToPNG();
+                File.WriteAllBytes(path, bytes);
+                Debug.Log($"Saved comparison to: {path}");
+                AssetDatabase.Refresh();
             }
         }
         
-        private void SaveTexture(Texture2D texture, string filename)
+        private class Pattern
         {
-            byte[] bytes = texture.EncodeToPNG();
-            string path = Path.Combine(Application.dataPath, $"{filename}.png");
-            File.WriteAllBytes(path, bytes);
-            AssetDatabase.Refresh();
-            Debug.Log($"Texture saved to: {path}");
-        }
-        
-        private struct PatternDefinition
-        {
-            public TerrainType topLeft;
-            public TerrainType topRight;
-            public TerrainType bottomLeft;
-            public TerrainType bottomRight;
+            public int index;
+            public TerrainType tl, tr, bl, br;
         }
     }
 #endif
