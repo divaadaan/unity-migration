@@ -9,8 +9,7 @@ namespace MiningGame
 #if UNITY_EDITOR
     public class PatternVerifier : EditorWindow
     {
-        // Core references
-        private PatternMapper patternMapper;
+        private TileMapping tileMapping;
         private Texture2D artistTilemap;
         
         // Settings
@@ -18,7 +17,7 @@ namespace MiningGame
         private int columns = 8;
         private int rows = 10;
         
-        // Results
+     
         private Texture2D comparisonTexture;
         private List<string> errors = new List<string>();
         
@@ -34,8 +33,7 @@ namespace MiningGame
             EditorGUILayout.LabelField("Tile Pattern Verifier", EditorStyles.boldLabel);
             EditorGUILayout.Space();
             
-            // Input fields
-            patternMapper = EditorGUILayout.ObjectField("Pattern Mapper", patternMapper, typeof(PatternMapper), false) as PatternMapper;
+            tileMapping = EditorGUILayout.ObjectField("Tile Mapper", tileMapping, typeof(TileMapping), false) as TileMapping;
             artistTilemap = EditorGUILayout.ObjectField("Artist Tilemap", artistTilemap, typeof(Texture2D), false) as Texture2D;
             
             EditorGUILayout.Space();
@@ -45,7 +43,6 @@ namespace MiningGame
             
             EditorGUILayout.Space();
             
-            // Action buttons
             if (GUILayout.Button("Generate Comparison", GUILayout.Height(30)))
             {
                 GenerateComparison();
@@ -59,7 +56,6 @@ namespace MiningGame
                 }
             }
             
-            // Display errors
             if (errors.Count > 0)
             {
                 EditorGUILayout.Space();
@@ -75,7 +71,6 @@ namespace MiningGame
                 }
             }
             
-            // Display preview
             if (comparisonTexture != null)
             {
                 EditorGUILayout.Space();
@@ -90,8 +85,7 @@ namespace MiningGame
         {
             errors.Clear();
             
-            // Validation
-            if (patternMapper == null)
+            if (tileMapping == null)
             {
                 errors.Add("ERROR: Pattern Mapper not assigned");
                 return;
@@ -107,8 +101,7 @@ namespace MiningGame
             Debug.Log($"Artist tilemap: {artistTilemap.width}x{artistTilemap.height}px");
             Debug.Log($"Expected: {columns * tileSize}x{rows * tileSize}px");
             
-            // Initialize pattern mapper
-            patternMapper.InitializeLookups();
+            tileMapping.Initialize();
             
             // Create texture (side by side with gap)
             int gap = 20;
@@ -125,21 +118,15 @@ namespace MiningGame
                 pixels[i] = bgColor;
             comparisonTexture.SetPixels(pixels);
             
-            // Generate all 80 patterns (excluding all-empty)
             var patterns = GenerateAllPatterns();
             
             Debug.Log($"Generated {patterns.Count} patterns to verify");
             
-            // Draw systematic tiles on the left
             DrawSystematicTiles(patterns);
             
-            // Draw corresponding artist tiles on the right
-            DrawArtistTiles(patterns);
-            
-            // Draw divider
+            DrawArtistTiles(patterns);            
             DrawDivider(gap);
             
-            // Apply changes
             comparisonTexture.Apply();
             
             Debug.Log($"Comparison complete. {errors.Count} issues found.");
@@ -232,18 +219,18 @@ namespace MiningGame
             {
                 var pattern = patterns[i];
         
-                // Get artist tile position from mapper (this is our source of truth)
-                var (artistCol, artistRow) = patternMapper.GetArtistPosition(
+                // Get artist tile position from mapper
+                var (artistCol, artistRow) = tileMapping.GetArtistPositionTuple(
                     pattern.tl, pattern.tr, pattern.bl, pattern.br
                 );
         
-                // Display position (where it should appear in grid)
+                // Display position 
                 int displayCol = i % columns;
                 int displayRow = i / columns;
                 int displayX = xOffset + displayCol * tileSize;
                 int displayY = displayRow * tileSize;
         
-                // Source position in artist tilemap
+                // Source position artist tilemap
                 int sourceX = artistCol * tileSize;
                 int sourceY = artistRow * tileSize;
         
@@ -258,13 +245,12 @@ namespace MiningGame
                     continue;
                 }
         
-                // Copy artist tile - no verification needed, we trust the mapping
+                // Copy artist tile
                 try
                 {
                     var tilePixels = artistTilemap.GetPixels(sourceX, sourceY, tileSize, tileSize);
                     comparisonTexture.SetPixels(displayX, displayY, tileSize, tileSize, tilePixels);
             
-                    // Optional: Add subtle border to match left side
                     DrawBorder(displayX, displayY, tileSize, new Color(0.3f, 0.3f, 0.3f, 1f), 1);
                 }
                 catch (System.Exception e)
@@ -286,7 +272,7 @@ namespace MiningGame
         private void DrawErrorTile(int x, int y)
         {
             var pixels = new Color[tileSize * tileSize];
-            var errorColor = new Color(1f, 0f, 1f, 1f); // Magenta
+            var errorColor = new Color(1f, 0f, 1f, 1f);
             for (int i = 0; i < pixels.Length; i++)
                 pixels[i] = errorColor;
             comparisonTexture.SetPixels(x, y, tileSize, tileSize, pixels);
@@ -294,7 +280,6 @@ namespace MiningGame
         
         private void DrawLine(int x1, int y1, int x2, int y2, Color color, int thickness)
         {
-            // Simple line drawing (vertical or horizontal only)
             if (x1 == x2) // Vertical
             {
                 for (int t = 0; t < thickness; t++)
@@ -345,7 +330,6 @@ namespace MiningGame
         
         private void DrawLabel(int x, int y, string text)
         {
-            // Simple text placeholder - draws a small white rectangle
             var labelColor = Color.white;
             for (int dx = 0; dx < 20; dx++)
             {
