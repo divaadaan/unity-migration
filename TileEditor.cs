@@ -81,7 +81,7 @@ namespace MiningGame
                 }
             }
         }
-        
+
         private void ClearGrid(DualGridSystem system)
         {
             for (int y = 0; y < system.Height; y++)
@@ -92,6 +92,26 @@ namespace MiningGame
                 }
             }
             system.RefreshAllVisualTiles();
+        }
+        private void OnEnable()
+        {
+            // Subscribe to play mode state changes
+            EditorApplication.playModeStateChanged += OnPlayModeStateChanged;
+        }
+
+        private void OnDisable()
+        {
+            EditorApplication.playModeStateChanged -= OnPlayModeStateChanged;
+        }
+
+        private void OnPlayModeStateChanged(PlayModeStateChange state)
+        {
+            if (state == PlayModeStateChange.EnteredEditMode)
+            {
+                // Refresh tiles when returning to edit mode
+                var system = (DualGridSystem)target;
+                system.RefreshAllVisualTiles();
+            }
         }
     }
 }
