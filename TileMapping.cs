@@ -79,11 +79,17 @@ namespace MiningGame
             
             try
             {
-                var data = JsonUtility.FromJson<PatternList>($"{{\"patterns\":{mappingJson.text.Trim().TrimStart('{').TrimEnd('}')}}}");
+                // Simply parse the JSON as-is
+                var data = JsonUtility.FromJson<PatternList>(mappingJson.text);
+                
+                if (data.patterns == null)
+                {
+                    Debug.LogError("TileMapping: JSON parsed but patterns array is null");
+                    return;
+                }
                 
                 foreach (var entry in data.patterns)
                 {
-                    // Create key from pattern array
                     string key = $"{entry.pattern[0]},{entry.pattern[1]},{entry.pattern[2]},{entry.pattern[3]}";
                     patternToPosition[key] = new Vector2Int(entry.col, entry.row);
                 }
@@ -93,6 +99,7 @@ namespace MiningGame
             catch (System.Exception e)
             {
                 Debug.LogError($"TileMapping: Failed to parse JSON: {e.Message}");
+                Debug.LogError($"JSON content preview: {mappingJson.text.Substring(0, Mathf.Min(200, mappingJson.text.Length))}");
             }
         }
         
