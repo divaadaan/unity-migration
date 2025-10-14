@@ -23,7 +23,6 @@ namespace MiningGame
         
         [Header("Visual Settings")]
         [SerializeField] private Vector2 visualOffset = new Vector2(-0.5f, -0.5f);
-        [SerializeField] private bool showDebugGrid = false;
         
         [Header("Debug Settings")]
         [SerializeField] private bool showDebugOverlay = false;
@@ -54,13 +53,13 @@ namespace MiningGame
         {
             inputActions.Enable();
 
-            inputActions.GameplayMap.ToggleDebug.performed += OnToggleDebug;
+            inputActions.GameplayMap.ToggleDebug.performed += ToggleDebugOverlay;
             inputActions.GameplayMap.TileEdit.performed += OnTileEdit;
         }
         
         private void OnDisable()
         {
-            inputActions.GameplayMap.ToggleDebug.performed -= OnToggleDebug;
+            inputActions.GameplayMap.ToggleDebug.performed -= ToggleDebugOverlay;
             inputActions.GameplayMap.TileEdit.performed -= OnTileEdit;
             
             inputActions.Disable();
@@ -93,7 +92,7 @@ namespace MiningGame
             }
         }
         
-        public void ToggleDebugOverlay()
+        public void ToggleDebugOverlay(InputAction.CallbackContext context)
         {
             showDebugOverlay = !showDebugOverlay;
             UpdateDebugOverlay();

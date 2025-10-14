@@ -52,8 +52,6 @@ namespace MiningGame
         
         [Header("Configuration")]
         [SerializeField] private TextAsset mappingJson;
-        [SerializeField] private int tilemapColumns = 8;
-        [SerializeField] private int tilemapRows = 10;
         
         // Runtime lookup
         private Dictionary<string, Vector2Int> patternToPosition;
