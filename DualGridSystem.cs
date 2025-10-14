@@ -22,7 +22,7 @@ namespace MiningGame
         [SerializeField] private TileBase emptyTile; 
         
         [Header("Visual Settings")]
-        [SerializeField] private Vector2 visualOffset = new Vector2(-0.5f, -0.5f);
+        [SerializeField] private Vector2 visualOffset = new Vector2(-0.5f, 0.5f);
         
         [Header("Debug Settings")]
         [SerializeField] private bool showDebugOverlay = false;
@@ -308,9 +308,24 @@ namespace MiningGame
         
         public Vector2Int WorldToBaseGrid(Vector3 worldPos)
         {
-            // Convert world position to grid coordinates
-            var gridPos = colorTilemap.WorldToCell(worldPos);
-            return new Vector2Int(gridPos.x, gridPos.y);
+            // Convert world position to visual grid position
+            var visualGridPos = colorTilemap.WorldToCell(worldPos);
+            
+            // Convert visual grid position to base grid position
+            // Visual tile at (vx, vy) samples from base corners (vx, vy), (vx+1, vy), (vx, vy+1), (vx+1, vy+1)
+            
+            // Get the world position of the visual tile's origin
+            Vector3 visualTileWorldPos = colorTilemap.CellToWorld(visualGridPos);
+            
+            // Calculate position within the visual tile (0 to 1 range)
+            float localX = (worldPos.x - visualTileWorldPos.x) / colorTilemap.cellSize.x;
+            float localY = (worldPos.y - visualTileWorldPos.y) / colorTilemap.cellSize.y;
+            
+            // Determine which base grid cell was clicked
+            int baseX = visualGridPos.x + (localX >= 0.5f ? 1 : 0);
+            int baseY = visualGridPos.y + (localY >= 0.5f ? 1 : 0);
+            
+            return new Vector2Int(baseX, baseY);
         }
     }
 }
