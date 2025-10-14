@@ -1,6 +1,5 @@
 using UnityEngine;
 using System.Collections.Generic;
-using System.Linq;
 
 namespace MiningGame
 {
@@ -52,9 +51,11 @@ namespace MiningGame
         
         [Header("Configuration")]
         [SerializeField] private TextAsset mappingJson;
-        
+
         // Runtime lookup
         private Dictionary<string, Vector2Int> patternToPosition;
+        
+        [System.NonSerialized]
         private bool isInitialized = false;
         
         public void Initialize()
@@ -69,6 +70,7 @@ namespace MiningGame
             
             LoadMappingFromJson();
             isInitialized = true;
+            Debug.Log("TileMapping: Initialization complete");
         }
         
         private void LoadMappingFromJson()
@@ -77,27 +79,50 @@ namespace MiningGame
             
             try
             {
-                // Simply parse the JSON as-is
-                var data = JsonUtility.FromJson<PatternList>(mappingJson.text);
-                
-                if (data.patterns == null)
+                if (mappingJson == null)
                 {
-                    Debug.LogError("TileMapping: JSON parsed but patterns array is null");
+                    Debug.LogError("TileMapping: mappingJson is NULL!");
                     return;
                 }
                 
+                Debug.Log($"TileMapping: JSON text length: {mappingJson.text.Length}");
+                Debug.Log($"TileMapping: First 100 chars: {mappingJson.text.Substring(0, Mathf.Min(100, mappingJson.text.Length))}");
+                
+                var data = JsonUtility.FromJson<PatternList>(mappingJson.text);
+                
+                if (data == null)
+                {
+                    Debug.LogError("TileMapping: JsonUtility returned NULL!");
+                    return;
+                }
+                
+                if (data.patterns == null)
+                {
+                    Debug.LogError("TileMapping: Patterns array is NULL after parsing!");
+                    Debug.LogError($"Full JSON: {mappingJson.text}");
+                    return;
+                }
+                
+                Debug.Log($"TileMapping: Parsed {data.patterns.Length} pattern entries");
+                
                 foreach (var entry in data.patterns)
                 {
+                    if (entry.pattern == null || entry.pattern.Length != 4)
+                    {
+                        Debug.LogWarning($"TileMapping: Invalid pattern at index {entry.index}");
+                        continue;
+                    }
+                    
                     string key = $"{entry.pattern[0]},{entry.pattern[1]},{entry.pattern[2]},{entry.pattern[3]}";
                     patternToPosition[key] = new Vector2Int(entry.col, entry.row);
                 }
                 
-                Debug.Log($"TileMapping: Loaded {patternToPosition.Count} pattern mappings from JSON");
+                Debug.Log($"TileMapping: Successfully loaded {patternToPosition.Count} pattern mappings");
             }
             catch (System.Exception e)
             {
-                Debug.LogError($"TileMapping: Failed to parse JSON: {e.Message}");
-                Debug.LogError($"JSON content preview: {mappingJson.text.Substring(0, Mathf.Min(200, mappingJson.text.Length))}");
+                Debug.LogError($"TileMapping: Exception during JSON parsing: {e.Message}");
+                Debug.LogError($"Stack trace: {e.StackTrace}");
             }
         }
         

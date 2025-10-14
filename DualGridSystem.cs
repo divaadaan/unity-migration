@@ -41,10 +41,24 @@ namespace MiningGame
         private void Awake()
         {
             InitializeGrid();
-            if (tileMapping != null)
+            
+            if (tileMapping == null)
             {
-                tileMapping.Initialize();
+                Debug.LogError("DualGridSystem: tileMapping is NULL!");
+                return;
             }
+            
+            Debug.Log($"DualGridSystem: Initializing TileMapping at {Time.frameCount}");
+            tileMapping.Initialize();
+            Debug.Log($"DualGridSystem: TileMapping initialized, checking dictionary...");
+            
+            // Test immediate access
+            var testPos = tileMapping.GetArtistPosition(
+                TerrainType.Diggable, TerrainType.Diggable, 
+                TerrainType.Diggable, TerrainType.Diggable
+            );
+            Debug.Log($"DualGridSystem: Test pattern (1,1,1,1) returned position {testPos}");
+            
             inputActions = new TileEditorInputs();
             mainCamera = Camera.main;
         }
@@ -64,12 +78,12 @@ namespace MiningGame
             
             inputActions.Disable();
         }
-        
 
         private void Start()
         {
             RefreshAllVisualTiles();
         }
+
        private void OnTileEdit(InputAction.CallbackContext context)
         {
             HandleRuntimeTileEdit();
@@ -227,8 +241,9 @@ namespace MiningGame
             );
             
             // Calculate tile index (row 0 is at bottom in Unity)
-            int tileIndex = artistPos.y * 8 + artistPos.x;
-            
+            int tileIndex = (9 - artistPos.y) * 8 + artistPos.x;
+            Debug.Log($"Visual({visualX},{visualY}): Corners({tl.terrainType},{tr.terrainType},{bl.terrainType},{br.terrainType}) " +
+            $"-> ArtistPos({artistPos.x},{artistPos.y}) -> Index {tileIndex}"); 
             // Handle all-empty special case
             TileBase colorTile = null;
             TileBase normalTile = null;
