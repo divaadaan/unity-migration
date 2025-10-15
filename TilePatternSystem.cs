@@ -1,14 +1,9 @@
 using UnityEngine;
 using UnityEngine.Tilemaps;
 using System.Collections.Generic;
-using System.Linq;
 
 namespace MiningGame
 {
-    /// <summary>
-    /// Manages tile pattern mappings between corner combinations and actual tile assets
-    /// Supports custom artist tilemap layouts
-    /// </summary>
     [CreateAssetMenu(fileName = "TilePatternSystem", menuName = "Mining Game/Tile Pattern System")]
     public class TilePatternSystem : ScriptableObject
     {
@@ -27,8 +22,8 @@ namespace MiningGame
             
             [Header("Metadata")]
             public string patternName;
-            public int artistTilemapIndex = -1; // Position in artist's tilemap
-            public Vector2Int artistGridPosition; // Grid position in artist's layout
+            public int artistTilemapIndex = -1;
+            public Vector2Int artistGridPosition;
             
             public string GetKey()
             {
@@ -52,13 +47,13 @@ namespace MiningGame
         public Texture2D artistNormalTilemap;
         
         [Tooltip("Tile size in pixels in the artist's tilemap")]
-        public int tilePixelSize = 100;
+        public int tilePixelSize = SharedConstants.SOURCE_TILE_SIZE;
         
         [Tooltip("Number of columns in the artist's tilemap")]
-        public int tilemapColumns = 10;
+        public int tilemapColumns = SharedConstants.TILEMAP_COLUMNS;
         
         [Tooltip("Number of rows in the artist's tilemap")]
-        public int tilemapRows = 8;
+        public int tilemapRows = SharedConstants.TILEMAP_ROWS;
         
         [Header("Fallback Tiles")]
         [Tooltip("Tile to use when no pattern matches")]
@@ -69,14 +64,15 @@ namespace MiningGame
         public TileBase emptyColorTile;
         public TileBase emptyNormalTile;
         
-        // Runtime lookup dictionary
         private Dictionary<string, TilePattern> patternLookup;
         
-        /// <summary>
-        /// Initialize the pattern lookup dictionary for fast runtime access
-        /// </summary>
+        [System.NonSerialized]
+        private bool isInitialized = false;
+        
         public void InitializeLookup()
         {
+            if (isInitialized) return;
+            
             patternLookup = new Dictionary<string, TilePattern>();
             foreach (var pattern in patterns)
             {
@@ -90,15 +86,14 @@ namespace MiningGame
                     Debug.LogWarning($"Duplicate pattern found: {key}");
                 }
             }
+            
+            isInitialized = true;
             Debug.Log($"Initialized {patternLookup.Count} tile patterns");
         }
         
-        /// <summary>
-        /// Get the tile pattern for a specific corner combination
-        /// </summary>
         public TilePattern GetPattern(TerrainType tl, TerrainType tr, TerrainType bl, TerrainType br)
         {
-            if (patternLookup == null)
+            if (!isInitialized)
             {
                 InitializeLookup();
             }
@@ -110,7 +105,6 @@ namespace MiningGame
                 return pattern;
             }
             
-            // Special case for all-empty
             if (tl == TerrainType.Empty && tr == TerrainType.Empty && 
                 bl == TerrainType.Empty && br == TerrainType.Empty)
             {
@@ -130,9 +124,6 @@ namespace MiningGame
             return null;
         }
         
-        /// <summary>
-        /// Get color and normal tiles for a pattern
-        /// </summary>
         public (TileBase colorTile, TileBase normalTile) GetTiles(TerrainType tl, TerrainType tr, TerrainType bl, TerrainType br)
         {
             var pattern = GetPattern(tl, tr, bl, br);
@@ -146,22 +137,19 @@ namespace MiningGame
             return (fallbackColorTile, fallbackNormalTile);
         }
         
-        /// <summary>
-        /// Generate all 81 possible patterns (including all-empty)
-        /// </summary>
         [ContextMenu("Generate All Patterns")]
         public void GenerateAllPatterns()
         {
             patterns.Clear();
             int index = 0;
             
-            for (int tl = 0; tl <= 2; tl++)
+            for (int tl = 0; tl < SharedConstants.TERRAIN_TYPE_COUNT; tl++)
             {
-                for (int tr = 0; tr <= 2; tr++)
+                for (int tr = 0; tr < SharedConstants.TERRAIN_TYPE_COUNT; tr++)
                 {
-                    for (int bl = 0; bl <= 2; bl++)
+                    for (int bl = 0; bl < SharedConstants.TERRAIN_TYPE_COUNT; bl++)
                     {
-                        for (int br = 0; br <= 2; br++)
+                        for (int br = 0; br < SharedConstants.TERRAIN_TYPE_COUNT; br++)
                         {
                             var pattern = new TilePattern
                             {
@@ -171,12 +159,14 @@ namespace MiningGame
                                 bottomRight = (TerrainType)br,
                                 patternName = $"{tl}{tr}{bl}{br}",
                                 artistTilemapIndex = (tl == 0 && tr == 0 && bl == 0 && br == 0) ? -1 : index,
-                                artistGridPosition = new Vector2Int(index % tilemapColumns, index / tilemapColumns)
+                                artistGridPosition = new Vector2Int(
+                                    index % SharedConstants.TILEMAP_COLUMNS, 
+                                    index / SharedConstants.TILEMAP_COLUMNS
+                                )
                             };
                             
                             patterns.Add(pattern);
                             
-                            // Skip incrementing index for all-empty pattern
                             if (!(tl == 0 && tr == 0 && bl == 0 && br == 0))
                             {
                                 index++;
@@ -186,12 +176,9 @@ namespace MiningGame
                 }
             }
             
-            Debug.Log($"Generated {patterns.Count} patterns (80 tiles + 1 all-empty)");
+            Debug.Log($"Generated {patterns.Count} patterns ({SharedConstants.TOTAL_PATTERNS} tiles + 1 all-empty)");
         }
         
-        /// <summary>
-        /// Validate that all patterns have assigned tiles
-        /// </summary>
         [ContextMenu("Validate Pattern Assignments")]
         public void ValidatePatterns()
         {

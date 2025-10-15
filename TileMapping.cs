@@ -3,27 +3,11 @@ using System.Collections.Generic;
 
 namespace MiningGame
 {
-    /// <summary>
-    /// Represents a tile's data in the mining game
-    /// </summary>
     [System.Serializable]
     public class Tile
     {
         [Header("Core Properties")]
         public TerrainType terrainType;
-        
-        // Ready for additional properties like:
-        // [Header("Resources")]
-        // public ResourceType embeddedResource;
-        // public int resourceAmount;
-        
-        // [Header("Mining")]
-        // public int durability;
-        // public float miningDifficulty;
-        
-        // [Header("Visual")]
-        // public int damageLevel;
-        // public string biomeVariant;
         
         public Tile(TerrainType type)
         {
@@ -40,7 +24,7 @@ namespace MiningGame
             public int index;
             public int col;
             public int row;
-            public int[] pattern; // [tl, tr, bl, br]
+            public int[] pattern;
         }
         
         [System.Serializable]
@@ -52,7 +36,6 @@ namespace MiningGame
         [Header("Configuration")]
         [SerializeField] private TextAsset mappingJson;
 
-        // Runtime lookup
         private Dictionary<string, Vector2Int> patternToPosition;
         
         [System.NonSerialized]
@@ -105,9 +88,10 @@ namespace MiningGame
                 
                 Debug.Log($"TileMapping: Parsed {data.patterns.Length} pattern entries");
                 
+                const int PATTERN_ARRAY_SIZE = 4;
                 foreach (var entry in data.patterns)
                 {
-                    if (entry.pattern == null || entry.pattern.Length != 4)
+                    if (entry.pattern == null || entry.pattern.Length != PATTERN_ARRAY_SIZE)
                     {
                         Debug.LogWarning($"TileMapping: Invalid pattern at index {entry.index}");
                         continue;
@@ -126,9 +110,6 @@ namespace MiningGame
             }
         }
         
-        /// <summary>
-        /// Get artist tilemap position for a given corner pattern
-        /// </summary>
         public Vector2Int GetArtistPosition(TerrainType tl, TerrainType tr, TerrainType bl, TerrainType br)
         {
             if (!isInitialized) Initialize();
@@ -144,9 +125,6 @@ namespace MiningGame
             return Vector2Int.zero;
         }
         
-        /// <summary>
-        /// Get artist position for a visual tile based on surrounding tiles
-        /// </summary>
         public Vector2Int GetArtistPositionFromTiles(Tile topLeft, Tile topRight, Tile bottomLeft, Tile bottomRight)
         {
             return GetArtistPosition(
@@ -157,24 +135,17 @@ namespace MiningGame
             );
         }
         
-        /// <summary>
-        /// For compatibility with existing code that expects (int, int) tuple
-        /// </summary>
         public (int col, int row) GetArtistPositionTuple(TerrainType tl, TerrainType tr, TerrainType bl, TerrainType br)
         {
             var pos = GetArtistPosition(tl, tr, bl, br);
             return (pos.x, pos.y);
         }
         
-        /// <summary>
-        /// Create a Tile with a specific terrain type
-        /// </summary>
         public static Tile CreateTile(TerrainType terrainType)
         {
             return new Tile(terrainType);
         }
         
-        // Editor validation
         [ContextMenu("Validate JSON Mapping")]
         private void ValidateMapping()
         {
@@ -186,15 +157,14 @@ namespace MiningGame
                 return;
             }
             
-            // Check for all 80 non-empty patterns
             int found = 0;
-            for (int tl = 0; tl <= 2; tl++)
+            for (int tl = 0; tl < SharedConstants.TERRAIN_TYPE_COUNT; tl++)
             {
-                for (int tr = 0; tr <= 2; tr++)
+                for (int tr = 0; tr < SharedConstants.TERRAIN_TYPE_COUNT; tr++)
                 {
-                    for (int bl = 0; bl <= 2; bl++)
+                    for (int bl = 0; bl < SharedConstants.TERRAIN_TYPE_COUNT; bl++)
                     {
-                        for (int br = 0; br <= 2; br++)
+                        for (int br = 0; br < SharedConstants.TERRAIN_TYPE_COUNT; br++)
                         {
                             if (tl == 0 && tr == 0 && bl == 0 && br == 0) continue;
                             
@@ -208,7 +178,7 @@ namespace MiningGame
                 }
             }
             
-            Debug.Log($"Validation complete: {found}/80 patterns mapped");
+            Debug.Log($"Validation complete: {found}/{SharedConstants.TOTAL_PATTERNS} patterns mapped");
         }
     }
 }

@@ -2,7 +2,6 @@ using UnityEngine;
 using UnityEditor;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 
 namespace MiningGame
 {
@@ -12,20 +11,47 @@ namespace MiningGame
         private TileMapping tileMapping;
         private Texture2D artistTilemap;
         
-        // Settings
-        private int tileSize = 200;
-        private int columns = 8;
-        private int rows = 10;
+        private int tileSize = SharedConstants.SOURCE_TILE_SIZE;
+        private int columns = SharedConstants.TILEMAP_COLUMNS;
+        private int rows = SharedConstants.TILEMAP_ROWS;
         
-     
         private Texture2D comparisonTexture;
         private List<string> errors = new List<string>();
+        
+        // UI constants
+        private const int DIVIDER_GAP = 20;
+        private const int MIN_WINDOW_WIDTH = 400;
+        private const int MIN_WINDOW_HEIGHT = 500;
+        private const int GENERATE_BUTTON_HEIGHT = 30;
+        private const int ERROR_SCROLL_HEIGHT = 150;
+        private const int PREVIEW_HEIGHT = 200;
+        private const int PREVIEW_WIDTH = 380;
+        
+        // Drawing constants
+        private const int QUADRANT_DIVISIONS = 2;
+        private const int LINE_THICKNESS_HEAVY = 2;
+        private const int LINE_THICKNESS_LIGHT = 1;
+        private const int LABEL_WIDTH = 20;
+        private const int LABEL_HEIGHT = 15;
+        private const int LABEL_OFFSET_X = 5;
+        private const int LABEL_OFFSET_Y = 20;
+        
+        // Colors
+        private static readonly Color BACKGROUND_COLOR = new Color(0.2f, 0.2f, 0.2f, 1f);
+        private static readonly Color SYSTEMATIC_EMPTY_COLOR = new Color(0.95f, 0.95f, 0.95f, 1f);
+        private static readonly Color SYSTEMATIC_DIGGABLE_COLOR = new Color(0.4f, 0.6f, 1f, 1f);
+        private static readonly Color SYSTEMATIC_UNDIGGABLE_COLOR = new Color(0.8f, 0.2f, 0.2f, 1f);
+        private static readonly Color BORDER_COLOR_DARK = Color.black;
+        private static readonly Color BORDER_COLOR_LIGHT = new Color(0.3f, 0.3f, 0.3f, 1f);
+        private static readonly Color DIVIDER_COLOR = new Color(0.5f, 0.5f, 0.5f, 1f);
+        private static readonly Color LABEL_COLOR = Color.white;
+        private static readonly Color ERROR_TILE_COLOR = new Color(1f, 0f, 1f, 1f);
         
         [MenuItem("Mining Game/Pattern Verifier")]
         public static void ShowWindow()
         {
             var window = GetWindow<PatternVerifier>("Pattern Verifier");
-            window.minSize = new Vector2(400, 500);
+            window.minSize = new Vector2(MIN_WINDOW_WIDTH, MIN_WINDOW_HEIGHT);
         }
         
         private void OnGUI()
@@ -43,7 +69,7 @@ namespace MiningGame
             
             EditorGUILayout.Space();
             
-            if (GUILayout.Button("Generate Comparison", GUILayout.Height(30)))
+            if (GUILayout.Button("Generate Comparison", GUILayout.Height(GENERATE_BUTTON_HEIGHT)))
             {
                 GenerateComparison();
             }
@@ -61,8 +87,7 @@ namespace MiningGame
                 EditorGUILayout.Space();
                 EditorGUILayout.LabelField($"Issues Found: {errors.Count}", EditorStyles.boldLabel);
                 
-                var scrollRect = GUILayoutUtility.GetRect(0, 150, GUILayout.ExpandWidth(true));
-                using (var scrollView = new EditorGUILayout.ScrollViewScope(Vector2.zero, GUILayout.Height(150)))
+                using (var scrollView = new EditorGUILayout.ScrollViewScope(Vector2.zero, GUILayout.Height(ERROR_SCROLL_HEIGHT)))
                 {
                     foreach (var error in errors)
                     {
@@ -76,7 +101,7 @@ namespace MiningGame
                 EditorGUILayout.Space();
                 EditorGUILayout.LabelField("Preview:", EditorStyles.boldLabel);
                 
-                var rect = GUILayoutUtility.GetRect(380, 200);
+                var rect = GUILayoutUtility.GetRect(PREVIEW_WIDTH, PREVIEW_HEIGHT);
                 GUI.DrawTexture(rect, comparisonTexture, ScaleMode.ScaleToFit);
             }
         }
@@ -103,19 +128,15 @@ namespace MiningGame
             
             tileMapping.Initialize();
             
-            // Create texture (side by side with gap)
-            int gap = 20;
-            int width = columns * tileSize * 2 + gap;
+            int width = columns * tileSize * QUADRANT_DIVISIONS + DIVIDER_GAP;
             int height = rows * tileSize;
             
             comparisonTexture = new Texture2D(width, height, TextureFormat.RGBA32, false);
             comparisonTexture.filterMode = FilterMode.Point;
             
-            // Fill background
-            var bgColor = new Color(0.2f, 0.2f, 0.2f, 1f);
             var pixels = new Color[width * height];
             for (int i = 0; i < pixels.Length; i++)
-                pixels[i] = bgColor;
+                pixels[i] = BACKGROUND_COLOR;
             comparisonTexture.SetPixels(pixels);
             
             var patterns = GenerateAllPatterns();
@@ -123,9 +144,8 @@ namespace MiningGame
             Debug.Log($"Generated {patterns.Count} patterns to verify");
             
             DrawSystematicTiles(patterns);
-            
             DrawArtistTiles(patterns);            
-            DrawDivider(gap);
+            DrawDivider();
             
             comparisonTexture.Apply();
             
@@ -137,15 +157,15 @@ namespace MiningGame
             var patterns = new List<Pattern>();
             int index = 0;
             
-            for (int tl = 0; tl <= 2; tl++)
+            for (int tl = 0; tl < SharedConstants.TERRAIN_TYPE_COUNT; tl++)
             {
-                for (int tr = 0; tr <= 2; tr++)
+                for (int tr = 0; tr < SharedConstants.TERRAIN_TYPE_COUNT; tr++)
                 {
-                    for (int bl = 0; bl <= 2; bl++)
+                    for (int bl = 0; bl < SharedConstants.TERRAIN_TYPE_COUNT; bl++)
                     {
-                        for (int br = 0; br <= 2; br++)
+                        for (int br = 0; br < SharedConstants.TERRAIN_TYPE_COUNT; br++)
                         {
-                            // Skip all-empty
+                            // Skip all-empty pattern
                             if (tl == 0 && tr == 0 && bl == 0 && br == 0)
                                 continue;
                             
@@ -169,14 +189,14 @@ namespace MiningGame
         {
             Debug.Log("Drawing systematic tiles...");
     
-            for (int i = 0; i < patterns.Count && i < 80; i++)
+            for (int i = 0; i < patterns.Count && i < SharedConstants.TOTAL_PATTERNS; i++)
             {
                 var pattern = patterns[i];
                 int col = i % columns;
                 int row = i / columns;
         
                 int x = col * tileSize;
-                int y = row * tileSize;  // Row 0 at bottom, increasing upward
+                int y = row * tileSize;
         
                 DrawSystematicTile(x, y, pattern);
             }
@@ -184,57 +204,55 @@ namespace MiningGame
         
         private void DrawSystematicTile(int x, int y, Pattern pattern)
         {
-            int half = tileSize / 2;
+            int half = tileSize / QUADRANT_DIVISIONS;
             
-            // Colors for each terrain type
+            // Use systematic colors (different from debug colors for visual distinction)
             var colors = new Dictionary<TerrainType, Color>
             {
-                { TerrainType.Empty, new Color(0.95f, 0.95f, 0.95f, 1f) },
-                { TerrainType.Diggable, new Color(0.4f, 0.6f, 1f, 1f) },  // Blue
-                { TerrainType.Undiggable, new Color(0.8f, 0.2f, 0.2f, 1f) } // Red
+                { TerrainType.Empty, SYSTEMATIC_EMPTY_COLOR },
+                { TerrainType.Diggable, SYSTEMATIC_DIGGABLE_COLOR },
+                { TerrainType.Undiggable, SYSTEMATIC_UNDIGGABLE_COLOR }
             };
             
-            // Draw quadrants
-            DrawQuadrant(x, y + half, half, colors[pattern.tl]); // Top-left
-            DrawQuadrant(x + half, y + half, half, colors[pattern.tr]); // Top-right
-            DrawQuadrant(x, y, half, colors[pattern.bl]); // Bottom-left
-            DrawQuadrant(x + half, y, half, colors[pattern.br]); // Bottom-right
+            // Draw quadrants (top-left, top-right, bottom-left, bottom-right)
+            DrawQuadrant(x, y + half, half, colors[pattern.tl]);
+            DrawQuadrant(x + half, y + half, half, colors[pattern.tr]);
+            DrawQuadrant(x, y, half, colors[pattern.bl]);
+            DrawQuadrant(x + half, y, half, colors[pattern.br]);
             
-            // Draw grid lines
-            DrawLine(x + half, y, x + half, y + tileSize, Color.black, 2);
-            DrawLine(x, y + half, x + tileSize, y + half, Color.black, 2);
-            DrawBorder(x, y, tileSize, Color.black, 2);
+            // Draw quadrant dividers
+            DrawLine(x + half, y, x + half, y + tileSize, BORDER_COLOR_DARK, LINE_THICKNESS_HEAVY);
+            DrawLine(x, y + half, x + tileSize, y + half, BORDER_COLOR_DARK, LINE_THICKNESS_HEAVY);
+            
+            // Draw tile border
+            DrawBorder(x, y, tileSize, BORDER_COLOR_DARK, LINE_THICKNESS_HEAVY);
             
             // Add index label
-            DrawLabel(x + 5, y + tileSize - 20, pattern.index.ToString());
+            DrawLabel(x + LABEL_OFFSET_X, y + tileSize - LABEL_OFFSET_Y, pattern.index.ToString());
         }
         
         private void DrawArtistTiles(List<Pattern> patterns)
         {
             Debug.Log("Drawing artist tiles...");
     
-            int xOffset = columns * tileSize + 20; // Right side offset
+            int xOffset = columns * tileSize + DIVIDER_GAP;
     
-            for (int i = 0; i < patterns.Count && i < 80; i++)
+            for (int i = 0; i < patterns.Count && i < SharedConstants.TOTAL_PATTERNS; i++)
             {
                 var pattern = patterns[i];
         
-                // Get artist tile position from mapper
                 var (artistCol, artistRow) = tileMapping.GetArtistPositionTuple(
                     pattern.tl, pattern.tr, pattern.bl, pattern.br
                 );
         
-                // Display position 
                 int displayCol = i % columns;
                 int displayRow = i / columns;
                 int displayX = xOffset + displayCol * tileSize;
                 int displayY = displayRow * tileSize;
         
-                // Source position artist tilemap
                 int sourceX = artistCol * tileSize;
                 int sourceY = artistRow * tileSize;
         
-                // Validate source position is within bounds
                 if (sourceX < 0 || sourceY < 0 || 
                     sourceX + tileSize > artistTilemap.width || 
                     sourceY + tileSize > artistTilemap.height)
@@ -245,13 +263,12 @@ namespace MiningGame
                     continue;
                 }
         
-                // Copy artist tile
                 try
                 {
                     var tilePixels = artistTilemap.GetPixels(sourceX, sourceY, tileSize, tileSize);
                     comparisonTexture.SetPixels(displayX, displayY, tileSize, tileSize, tilePixels);
             
-                    DrawBorder(displayX, displayY, tileSize, new Color(0.3f, 0.3f, 0.3f, 1f), 1);
+                    DrawBorder(displayX, displayY, tileSize, BORDER_COLOR_LIGHT, LINE_THICKNESS_LIGHT);
                 }
                 catch (System.Exception e)
                 {
@@ -272,35 +289,38 @@ namespace MiningGame
         private void DrawErrorTile(int x, int y)
         {
             var pixels = new Color[tileSize * tileSize];
-            var errorColor = new Color(1f, 0f, 1f, 1f);
             for (int i = 0; i < pixels.Length; i++)
-                pixels[i] = errorColor;
+                pixels[i] = ERROR_TILE_COLOR;
             comparisonTexture.SetPixels(x, y, tileSize, tileSize, pixels);
         }
         
         private void DrawLine(int x1, int y1, int x2, int y2, Color color, int thickness)
         {
-            if (x1 == x2) // Vertical
+            int halfThickness = thickness / 2;
+            
+            if (x1 == x2) // Vertical line
             {
                 for (int t = 0; t < thickness; t++)
                 {
                     for (int y = Mathf.Min(y1, y2); y <= Mathf.Max(y1, y2); y++)
                     {
-                        if (x1 + t - thickness/2 >= 0 && x1 + t - thickness/2 < comparisonTexture.width && 
+                        int xPos = x1 + t - halfThickness;
+                        if (xPos >= 0 && xPos < comparisonTexture.width && 
                             y >= 0 && y < comparisonTexture.height)
-                            comparisonTexture.SetPixel(x1 + t - thickness/2, y, color);
+                            comparisonTexture.SetPixel(xPos, y, color);
                     }
                 }
             }
-            else if (y1 == y2) // Horizontal
+            else if (y1 == y2) // Horizontal line
             {
                 for (int t = 0; t < thickness; t++)
                 {
                     for (int x = Mathf.Min(x1, x2); x <= Mathf.Max(x1, x2); x++)
                     {
+                        int yPos = y1 + t - halfThickness;
                         if (x >= 0 && x < comparisonTexture.width && 
-                            y1 + t - thickness/2 >= 0 && y1 + t - thickness/2 < comparisonTexture.height)
-                            comparisonTexture.SetPixel(x, y1 + t - thickness/2, color);
+                            yPos >= 0 && yPos < comparisonTexture.height)
+                            comparisonTexture.SetPixel(x, yPos, color);
                     }
                 }
             }
@@ -308,35 +328,38 @@ namespace MiningGame
         
         private void DrawBorder(int x, int y, int size, Color color, int thickness)
         {
-            DrawLine(x, y, x + size, y, color, thickness);
+            // Top
             DrawLine(x, y + size, x + size, y + size, color, thickness);
+            // Bottom
+            DrawLine(x, y, x + size, y, color, thickness);
+            // Left
             DrawLine(x, y, x, y + size, color, thickness);
+            // Right
             DrawLine(x + size, y, x + size, y + size, color, thickness);
         }
         
-        private void DrawDivider(int gap)
+        private void DrawDivider()
         {
             int x = columns * tileSize;
-            var dividerColor = new Color(0.5f, 0.5f, 0.5f, 1f);
             
-            for (int dx = 0; dx < gap; dx++)
+            for (int dx = 0; dx < DIVIDER_GAP; dx++)
             {
                 for (int y = 0; y < comparisonTexture.height; y++)
                 {
-                    comparisonTexture.SetPixel(x + dx, y, dividerColor);
+                    comparisonTexture.SetPixel(x + dx, y, DIVIDER_COLOR);
                 }
             }
         }
         
         private void DrawLabel(int x, int y, string text)
         {
-            var labelColor = Color.white;
-            for (int dx = 0; dx < 20; dx++)
+            // Draw simple label background
+            for (int dx = 0; dx < LABEL_WIDTH; dx++)
             {
-                for (int dy = 0; dy < 15; dy++)
+                for (int dy = 0; dy < LABEL_HEIGHT; dy++)
                 {
                     if (x + dx < comparisonTexture.width && y + dy < comparisonTexture.height)
-                        comparisonTexture.SetPixel(x + dx, y + dy, labelColor);
+                        comparisonTexture.SetPixel(x + dx, y + dy, LABEL_COLOR);
                 }
             }
         }
