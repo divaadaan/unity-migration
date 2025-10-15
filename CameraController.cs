@@ -38,6 +38,13 @@ namespace MiningGame
         
         private void Start()
         {
+            // Calculate bounds from grid system
+            var gridSystem = Object.FindFirstObjectByType<DualGridSystem>();
+            if (gridSystem != null)
+            {
+                minBounds = new Vector2(-2, -2);
+                maxBounds = new Vector2(gridSystem.Width + 2, gridSystem.Height + 2);
+            }
             targetPosition = transform.position;
         }
         

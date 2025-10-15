@@ -22,7 +22,7 @@ namespace MiningGame
         [SerializeField] private TileBase emptyTile; 
         
         [Header("Visual Settings")]
-        [SerializeField] private Vector2 visualOffset = new Vector2(-0.5f, 0.5f);
+        [SerializeField] private Vector2 visualOffset = new Vector2(-0.5f, -0.5f);
         
         [Header("Debug Settings")]
         [SerializeField] private bool showDebugOverlay = false;
@@ -31,10 +31,11 @@ namespace MiningGame
         [SerializeField] private Color debugUndiggableColor = new Color(1f, 0f, 0f, 0.3f);
 
 
+        //Class member variables
         private Tile[,] baseGrid;
         private TileEditorInputs inputActions;
         private Camera mainCamera;
-       
+        private static readonly Tile OUT_OF_BOUNDS_TILE = new Tile(TerrainType.Undiggable);      
         public int Width => gridWidth;
         public int Height => gridHeight;
         
@@ -178,7 +179,7 @@ namespace MiningGame
         {
             if (x < 0 || x >= gridWidth || y < 0 || y >= gridHeight)
             {
-                return new Tile(TerrainType.Undiggable);
+                return OUT_OF_BOUNDS_TILE;  // ✅ Reuses single instance
             }
             return baseGrid[y, x];
         }
@@ -240,7 +241,7 @@ namespace MiningGame
                 tl.terrainType, tr.terrainType, bl.terrainType, br.terrainType
             );
             
-            // Calculate tile index (row 0 is at bottom in Unity)
+            // Calculate tile index
             int tileIndex = (9 - artistPos.y) * 8 + artistPos.x;
             Debug.Log($"Visual({visualX},{visualY}): Corners({tl.terrainType},{tr.terrainType},{bl.terrainType},{br.terrainType}) " +
             $"-> ArtistPos({artistPos.x},{artistPos.y}) -> Index {tileIndex}"); 
@@ -272,23 +273,22 @@ namespace MiningGame
         
         private void UpdateAffectedVisualTiles(int baseX, int baseY)
         {
-            // A change at base position affects up to 4 visual tiles
-            var positions = new Vector2Int[]
-            {
-                new Vector2Int(baseX - 1, baseY - 1),
-                new Vector2Int(baseX, baseY - 1),
-                new Vector2Int(baseX - 1, baseY),
-                new Vector2Int(baseX, baseY)
-            };
+            // Visual tiles that sample from this base position
+            // Visual tile (vx,vy) samples base positions: (vx,vy), (vx+1,vy), (vx,vy+1), (vx+1,vy+1)
+            // So base position (bx,by) affects visual tiles where:
+            // bx ∈ {vx, vx+1} and by ∈ {vy, vy+1}
             
-            foreach (var pos in positions)
+            for (int vx = baseX - 1; vx <= baseX; vx++)
             {
-                if (pos.x >= 0 && pos.x < gridWidth && pos.y >= 0 && pos.y < gridHeight)
+                for (int vy = baseY - 1; vy <= baseY; vy++)
                 {
-                    UpdateVisualTile(pos.x, pos.y);
+                    if (vx >= -1 && vx < gridWidth && vy >= -1 && vy < gridHeight)
+                    {
+                        UpdateVisualTile(vx, vy);
+                    }
                 }
             }
-        }
+        }   
         
         public void RefreshAllVisualTiles()
         {
@@ -308,22 +308,47 @@ namespace MiningGame
         
         public Vector2Int WorldToBaseGrid(Vector3 worldPos)
         {
-            // Convert world position to visual grid position
-            var visualGridPos = colorTilemap.WorldToCell(worldPos);
+            // The visual tilemap is offset by (-0.5, -0.5) from base grid
+            // This means visual tile (0,0) represents the area from (-0.5,-0.5) to (0.5,0.5)
+            // Which samples base grid corners at (0,0), (1,0), (0,1), (1,1)
             
-            // Convert visual grid position to base grid position
-            // Visual tile at (vx, vy) samples from base corners (vx, vy), (vx+1, vy), (vx, vy+1), (vx+1, vy+1)
+            // To find which base cell was clicked:
+            // 1. Find which visual tile contains the world position
+            Vector3Int visualCell = colorTilemap.WorldToCell(worldPos);
             
-            // Get the world position of the visual tile's origin
-            Vector3 visualTileWorldPos = colorTilemap.CellToWorld(visualGridPos);
+            // 2. Get the local position within that visual tile
+            Vector3 cellWorldPos = colorTilemap.CellToWorld(visualCell);
+            float localX = (worldPos.x - cellWorldPos.x) / colorTilemap.cellSize.x;
+            float localY = (worldPos.y - cellWorldPos.y) / colorTilemap.cellSize.y;
             
-            // Calculate position within the visual tile (0 to 1 range)
-            float localX = (worldPos.x - visualTileWorldPos.x) / colorTilemap.cellSize.x;
-            float localY = (worldPos.y - visualTileWorldPos.y) / colorTilemap.cellSize.y;
+            // 3. Determine which quadrant (which base cell)
+            // Visual tile samples from 4 base positions, we need to pick one
+            int baseX, baseY;
             
-            // Determine which base grid cell was clicked
-            int baseX = visualGridPos.x + (localX >= 0.5f ? 1 : 0);
-            int baseY = visualGridPos.y + (localY >= 0.5f ? 1 : 0);
+            if (localX < 0.5f && localY < 0.5f)
+            {
+                // Bottom-left quadrant -> base position (vx, vy)
+                baseX = visualCell.x;
+                baseY = visualCell.y;
+            }
+            else if (localX >= 0.5f && localY < 0.5f)
+            {
+                // Bottom-right quadrant -> base position (vx+1, vy)
+                baseX = visualCell.x + 1;
+                baseY = visualCell.y;
+            }
+            else if (localX < 0.5f && localY >= 0.5f)
+            {
+                // Top-left quadrant -> base position (vx, vy+1)
+                baseX = visualCell.x;
+                baseY = visualCell.y + 1;
+            }
+            else
+            {
+                // Top-right quadrant -> base position (vx+1, vy+1)
+                baseX = visualCell.x + 1;
+                baseY = visualCell.y + 1;
+            }
             
             return new Vector2Int(baseX, baseY);
         }

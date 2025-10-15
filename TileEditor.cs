@@ -57,8 +57,8 @@ namespace MiningGame
             
             if (e.type == EventType.MouseDown && e.alt && e.button == 0)
             {
-                Ray ray = HandleUtility.GUIPointToWorldRay(e.mousePosition);
-                Vector3 worldPoint = ray.origin - ray.direction * (ray.origin.z / ray.direction.z);
+                Vector3 worldPoint = HandleUtility.GUIPointToWorldRay(e.mousePosition).GetPoint(0);
+                worldPoint.z = 0;
                 
                 Vector2Int gridPos = system.WorldToBaseGrid(worldPoint);
                 
@@ -84,15 +84,17 @@ namespace MiningGame
 
         private void ClearGrid(DualGridSystem system)
         {
+            var emptyTile = new Tile(TerrainType.Empty); // Create once
             for (int y = 0; y < system.Height; y++)
             {
                 for (int x = 0; x < system.Width; x++)
                 {
-                    system.SetTileAt(x, y, new Tile(TerrainType.Empty));
+                    system.SetTileAt(x, y, emptyTile); // ✅ Reuse
                 }
             }
             system.RefreshAllVisualTiles();
         }
+
         private void OnEnable()
         {
             // Subscribe to play mode state changes
@@ -106,11 +108,10 @@ namespace MiningGame
 
         private void OnPlayModeStateChanged(PlayModeStateChange state)
         {
-            if (state == PlayModeStateChange.EnteredEditMode)
+            if (state == PlayModeStateChange.EnteredEditMode && target != null)
             {
-                // Refresh tiles when returning to edit mode
-                var system = (DualGridSystem)target;
-                system.RefreshAllVisualTiles();
+                var system = target as DualGridSystem;
+                system?.RefreshAllVisualTiles();
             }
         }
     }
