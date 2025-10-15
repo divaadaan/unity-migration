@@ -110,9 +110,15 @@ namespace MiningGame
             }
         }
         
-        public Vector2Int GetArtistPosition(TerrainType tl, TerrainType tr, TerrainType bl, TerrainType br)
+        public Vector2Int? GetArtistPosition(TerrainType tl, TerrainType tr, TerrainType bl, TerrainType br)
         {
             if (!isInitialized) Initialize();
+
+                if (tl == TerrainType.Empty && tr == TerrainType.Empty && 
+                    bl == TerrainType.Empty && br == TerrainType.Empty)
+                {
+                    return null;
+                }
             
             string key = $"{(int)tl},{(int)tr},{(int)bl},{(int)br}";
             
@@ -125,7 +131,7 @@ namespace MiningGame
             return Vector2Int.zero;
         }
         
-        public Vector2Int GetArtistPositionFromTiles(Tile topLeft, Tile topRight, Tile bottomLeft, Tile bottomRight)
+        public Vector2Int? GetArtistPositionFromTiles(Tile topLeft, Tile topRight, Tile bottomLeft, Tile bottomRight)
         {
             return GetArtistPosition(
                 topLeft?.terrainType ?? TerrainType.Undiggable,
@@ -138,7 +144,7 @@ namespace MiningGame
         public (int col, int row) GetArtistPositionTuple(TerrainType tl, TerrainType tr, TerrainType bl, TerrainType br)
         {
             var pos = GetArtistPosition(tl, tr, bl, br);
-            return (pos.x, pos.y);
+            return pos.HasValue ? (pos.Value.x, pos.Value.y) : (-1, -1);
         }
         
         public static Tile CreateTile(TerrainType terrainType)

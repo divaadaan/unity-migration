@@ -214,35 +214,38 @@ namespace MiningGame
             if (tileMapping == null || artistColorTiles == null || artistColorTiles.Length == 0)
                 return;
             
+            // Get the four corners
             var tl = GetTileAt(visualX, visualY);
             var tr = GetTileAt(visualX + 1, visualY);
             var bl = GetTileAt(visualX, visualY + 1);
             var br = GetTileAt(visualX + 1, visualY + 1);
             
+            // Get artist tile position (returns null for all-empty pattern)
             var artistPos = tileMapping.GetArtistPosition(
                 tl.terrainType, tr.terrainType, bl.terrainType, br.terrainType
             );
             
-            int tileIndex = (SharedConstants.TILEMAP_ROWS - 1 - artistPos.y) * SharedConstants.TILEMAP_COLUMNS + artistPos.x;
-            
-            Debug.Log($"Visual({visualX},{visualY}): Corners({tl.terrainType},{tr.terrainType},{bl.terrainType},{br.terrainType}) " +
-                     $"-> ArtistPos({artistPos.x},{artistPos.y}) -> Index {tileIndex}"); 
-            
             TileBase colorTile = null;
             TileBase normalTile = null;
             
-            if (tl.terrainType == TerrainType.Empty && tr.terrainType == TerrainType.Empty &&
-                bl.terrainType == TerrainType.Empty && br.terrainType == TerrainType.Empty)
+            // Handle all-empty pattern (null) vs mapped patterns
+            if (!artistPos.HasValue)
             {
                 colorTile = emptyTile;
             }
-            else if (tileIndex >= 0 && tileIndex < artistColorTiles.Length)
+            else
             {
-                colorTile = artistColorTiles[tileIndex];
-                if (artistNormalTiles != null && tileIndex < artistNormalTiles.Length)
-                    normalTile = artistNormalTiles[tileIndex];
+                int tileIndex = (SharedConstants.TILEMAP_ROWS - 1 - artistPos.Value.y) * SharedConstants.TILEMAP_COLUMNS + artistPos.Value.x;
+                
+                if (tileIndex >= 0 && tileIndex < artistColorTiles.Length)
+                {
+                    colorTile = artistColorTiles[tileIndex];
+                    if (artistNormalTiles != null && tileIndex < artistNormalTiles.Length)
+                        normalTile = artistNormalTiles[tileIndex];
+                }
             }
             
+            // Set tiles in tilemaps
             Vector3Int tilePos = new Vector3Int(visualX, visualY, 0);
             
             if (colorTilemap != null && colorTile != null)
@@ -258,7 +261,7 @@ namespace MiningGame
             {
                 for (int vy = baseY - 1; vy <= baseY; vy++)
                 {
-                    if (vx >= -1 && vx < gridWidth && vy >= -1 && vy < gridHeight)
+                    if (vx >= 0 && vx < gridWidth && vy >= 0 && vy < gridHeight)
                     {
                         UpdateVisualTile(vx, vy);
                     }
@@ -281,17 +284,17 @@ namespace MiningGame
             
             Debug.Log($"Refreshed {gridWidth}x{gridHeight} visual tiles");
         }
-        
+
         public Vector2Int WorldToBaseGrid(Vector3 worldPos)
         {
             Vector3Int visualCell = colorTilemap.WorldToCell(worldPos);
-            
+
             Vector3 cellWorldPos = colorTilemap.CellToWorld(visualCell);
             float localX = (worldPos.x - cellWorldPos.x) / colorTilemap.cellSize.x;
             float localY = (worldPos.y - cellWorldPos.y) / colorTilemap.cellSize.y;
-            
+
             int baseX, baseY;
-            
+
             if (localX < 0.5f && localY < 0.5f)
             {
                 baseX = visualCell.x;
@@ -312,8 +315,45 @@ namespace MiningGame
                 baseX = visualCell.x + 1;
                 baseY = visualCell.y + 1;
             }
-            
+
             return new Vector2Int(baseX, baseY);
+        }
+        
+        [ContextMenu("Debug Bottom Row")]
+        public void DebugBottomRow()
+        {
+            Debug.Log("=== BOTTOM ROW DEBUG ===");
+            
+            // Check base grid bottom row (y=0 in array, bottom of map)
+            for (int x = 0; x < gridWidth; x++)
+            {
+                var tile = GetTileAt(x, 0);
+                Debug.Log($"Base[{x},0] = {tile.terrainType}");
+            }
+            
+            // Check what visual tiles see for bottom row
+            for (int vx = 0; vx < gridWidth; vx++)
+            {
+                var tl = GetTileAt(vx, 0);
+                var tr = GetTileAt(vx + 1, 0);
+                var bl = GetTileAt(vx, 1);
+                var br = GetTileAt(vx + 1, 1);
+
+                var artistPos = tileMapping.GetArtistPosition(
+                    tl.terrainType, tr.terrainType, bl.terrainType, br.terrainType
+                );
+                
+                if (!artistPos.HasValue)
+                {
+                    Debug.Log($"Visual[{vx},0]: TL={tl.terrainType} TR={tr.terrainType} BL={bl.terrainType} BR={br.terrainType} -> Artist(Empty)");
+                    continue;
+                }
+                else
+                {
+                    int tileIndex = artistPos.Value.y * SharedConstants.TILEMAP_COLUMNS + artistPos.Value.x;
+                    Debug.Log($"Visual[{vx},0]: TL={tl.terrainType} TR={tr.terrainType} BL={bl.terrainType} BR={br.terrainType} -> Artist({artistPos.Value.x},{artistPos.Value.y}) -> Index {tileIndex}");
+                }                
+            }
         }
     }
 }
