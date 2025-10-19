@@ -2,7 +2,7 @@ using UnityEngine;
 using UnityEngine.Tilemaps;
 using System.Collections.Generic;
 
-namespace MiningGame
+namespace DigDigDiner
 {
     [CreateAssetMenu(fileName = "TilePatternSystem", menuName = "Mining Game/Tile Pattern System")]
     public class TilePatternSystem : ScriptableObject

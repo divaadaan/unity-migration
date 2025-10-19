@@ -1,7 +1,7 @@
 using UnityEngine;
 using System.Collections.Generic;
 
-namespace MiningGame
+namespace DigDigDiner
 {
     [System.Serializable]
     public class Tile

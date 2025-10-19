@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(for file in Tiles/*.cs)",
+      "Bash(done)",
+      "Bash(for file in Input/*.cs)",
+      "Bash(tree -L 2)",
+      "Bash(for file in *.cs)",
+      "Bash(do sed -i 's/namespace MiningGame/namespace DigDigDiner/g' \"$file\")"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

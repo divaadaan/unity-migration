@@ -2,7 +2,7 @@ using UnityEngine;
 using UnityEngine.Tilemaps;
 using UnityEngine.InputSystem;
 
-namespace MiningGame
+namespace DigDigDiner
 {
     public class DualGridSystem : MonoBehaviour
     {
@@ -41,38 +41,51 @@ namespace MiningGame
         
         private void Awake()
         {
-            InitializeGrid();
-            
+            // Initialize the base grid array (MapGenerator will populate it)
+            baseGrid = new Tile[gridHeight, gridWidth];
+
             if (tileMapping == null)
             {
                 Debug.LogError("DualGridSystem: tileMapping is NULL!");
                 return;
             }
-            
+
             Debug.Log($"DualGridSystem: Initializing TileMapping at {Time.frameCount}");
             tileMapping.Initialize();
             Debug.Log($"DualGridSystem: TileMapping initialized, checking dictionary...");
-            
+
             // Test immediate access
             var testPos = tileMapping.GetArtistPosition(
-                TerrainType.Diggable, TerrainType.Diggable, 
+                TerrainType.Diggable, TerrainType.Diggable,
                 TerrainType.Diggable, TerrainType.Diggable
             );
             Debug.Log($"DualGridSystem: Test pattern (1,1,1,1) returned position {testPos}");
-            
+
             inputActions = new TileEditorInputs();
             mainCamera = Camera.main;
         }
 
         private void OnEnable()
         {
+            if (inputActions == null)
+            {
+                Debug.LogWarning("DualGridSystem: inputActions is null in OnEnable!");
+                return;
+            }
+
             inputActions.Enable();
             inputActions.GameplayMap.ToggleDebug.performed += ToggleDebugOverlay;
             inputActions.GameplayMap.TileEdit.performed += OnTileEdit;
         }
-        
+
         private void OnDisable()
         {
+            if (inputActions == null)
+            {
+                Debug.LogWarning("DualGridSystem: inputActions is null in OnDisable!");
+                return;
+            }
+
             inputActions.GameplayMap.ToggleDebug.performed -= ToggleDebugOverlay;
             inputActions.GameplayMap.TileEdit.performed -= OnTileEdit;
             inputActions.Disable();
@@ -90,13 +103,25 @@ namespace MiningGame
         
         private void HandleRuntimeTileEdit()
         {
+            if (inputActions == null)
+            {
+                Debug.LogWarning("DualGridSystem: inputActions is null!");
+                return;
+            }
+
+            if (mainCamera == null)
+            {
+                Debug.LogWarning("DualGridSystem: mainCamera is null!");
+                return;
+            }
+
             Vector2 mousePos = inputActions.GameplayMap.MousePosition.ReadValue<Vector2>();
             Vector3 worldPos = mainCamera.ScreenToWorldPoint(new Vector3(mousePos.x, mousePos.y, 0));
             worldPos.z = 0;
-            
+
             Vector2Int gridPos = WorldToBaseGrid(worldPos);
-            
-            if (gridPos.x >= 0 && gridPos.x < gridWidth && 
+
+            if (gridPos.x >= 0 && gridPos.x < gridWidth &&
                 gridPos.y >= 0 && gridPos.y < gridHeight)
             {
                 CycleTileAt(gridPos.x, gridPos.y);
@@ -152,27 +177,6 @@ namespace MiningGame
             }
         }
         
-        private void InitializeGrid()
-        {
-            baseGrid = new Tile[gridHeight, gridWidth];
-            
-            for (int y = 0; y < gridHeight; y++)
-            {
-                for (int x = 0; x < gridWidth; x++)
-                {
-                    TerrainType type = TerrainType.Empty;
-                    
-                    if (x == 0 || x == gridWidth - 1 || y == 0 || y == gridHeight - 1)
-                        type = TerrainType.Undiggable;
-                    else if (Random.Range(0f, 1f) < 0.3f)
-                        type = TerrainType.Diggable;
-                    else if (Random.Range(0f, 1f) < 0.1f)
-                        type = TerrainType.Undiggable;
-                    
-                    baseGrid[y, x] = new Tile(type);
-                }
-            }
-        }
         
         public Tile GetTileAt(int x, int y)
         {
@@ -189,6 +193,18 @@ namespace MiningGame
             {
                 baseGrid[y, x] = tile;
                 UpdateAffectedVisualTiles(x, y);
+            }
+        }
+
+        /// <summary>
+        /// Sets a tile without triggering visual updates.
+        /// Use this for batch operations like map generation.
+        /// </summary>
+        public void SetTileAtSilent(int x, int y, Tile tile)
+        {
+            if (x >= 0 && x < gridWidth && y >= 0 && y < gridHeight)
+            {
+                baseGrid[y, x] = tile;
             }
         }
 

@@ -3,7 +3,7 @@ using UnityEditor;
 using System.Collections.Generic;
 using System.IO;
 
-namespace MiningGame
+namespace DigDigDiner
 {
 #if UNITY_EDITOR
     public class PatternVerifier : EditorWindow

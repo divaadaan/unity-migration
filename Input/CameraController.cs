@@ -1,7 +1,7 @@
 using UnityEngine;
 using UnityEngine.InputSystem;
 
-namespace MiningGame
+namespace DigDigDiner
 {
     public class CameraController : MonoBehaviour
     {
@@ -26,12 +26,24 @@ namespace MiningGame
         
         private void OnEnable()
         {
+            if (inputActions == null)
+            {
+                Debug.LogWarning("CameraController: inputActions is null in OnEnable!");
+                return;
+            }
+
             inputActions.Enable();
             inputActions.CameraMap.ResetCamera.performed += OnResetCamera;
         }
-        
+
         private void OnDisable()
         {
+            if (inputActions == null)
+            {
+                Debug.LogWarning("CameraController: inputActions is null in OnDisable!");
+                return;
+            }
+
             inputActions.CameraMap.ResetCamera.performed -= OnResetCamera;
             inputActions.Disable();
         }
@@ -61,18 +73,24 @@ namespace MiningGame
         
         private void Update()
         {
+            if (inputActions == null)
+            {
+                Debug.LogWarning("CameraController: inputActions is null!");
+                return;
+            }
+
             moveInput = inputActions.CameraMap.Move.ReadValue<Vector2>();
-            
+
             if (moveInput != Vector2.zero)
             {
                 Vector3 moveDirection = new Vector3(moveInput.x, moveInput.y, 0);
                 targetPosition += moveDirection * moveSpeed * Time.deltaTime;
-                
+
                 targetPosition.x = Mathf.Clamp(targetPosition.x, minBounds.x, maxBounds.x);
                 targetPosition.y = Mathf.Clamp(targetPosition.y, minBounds.y, maxBounds.y);
                 targetPosition.z = transform.position.z;
             }
-            
+
             UpdatePosition();
         }
         

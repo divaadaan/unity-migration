@@ -1,6 +1,6 @@
 using UnityEngine;
 
-namespace MiningGame
+namespace DigDigDiner
 {
     /// <summary>
     /// Defines the three terrain types used in the mining game

@@ -1,6 +1,6 @@
 using UnityEngine;
 
-namespace MiningGame
+namespace DigDigDiner
 {
     public static class SharedConstants
     {

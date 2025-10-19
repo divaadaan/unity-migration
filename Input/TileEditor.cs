@@ -1,7 +1,7 @@
 using UnityEngine;
 using UnityEditor;
 
-namespace MiningGame
+namespace DigDigDiner
 {
     [CustomEditor(typeof(DualGridSystem))]
     public class DualGridSystemEditor : Editor
