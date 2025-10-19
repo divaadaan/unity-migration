@@ -13,8 +13,13 @@ namespace DigDigDiner
         [Header("Generation Settings")]
         [SerializeField] private int numberOfCaverns = 4;
         [SerializeField] private int minCavernSpacing = 6;
+
+        [Header("Entrance Settings")]
         [SerializeField] private int entranceNeckWidth = 2;
         [SerializeField] private int entranceNeckLength = 3;
+        [SerializeField] private int spawnAreaHeight = 2;
+
+        [Header("Advanced Settings")]
         [SerializeField] private int maxPlacementAttempts = 100;
         [SerializeField] private int extraConnections = 1;
 
@@ -132,15 +137,31 @@ namespace DigDigDiner
         }
 
         /// <summary>
-        /// Generates entrance neck and returns the bottom position.
+        /// Generates entrance with spawn area at top and diggable neck leading down.
+        /// Returns the bottom position of the entrance.
         /// </summary>
         private Vector2Int GenerateEntranceNeck()
         {
             int centerX = gridSystem.Width / 2;
-            int startY = gridSystem.Height - 2;
-            int endY = startY - entranceNeckLength;
+            int topY = gridSystem.Height - 1;
+            int neckStartY = topY - spawnAreaHeight;
+            int neckEndY = neckStartY - entranceNeckLength;
 
-            for (int y = startY; y > endY && y > 0; y--)
+            // Create empty spawn area at the top (player spawns here)
+            for (int y = topY; y > neckStartY && y >= 0; y--)
+            {
+                for (int dx = -entranceNeckWidth / 2; dx <= entranceNeckWidth / 2; dx++)
+                {
+                    int x = centerX + dx;
+                    if (x >= 0 && x < gridSystem.Width)
+                    {
+                        gridSystem.SetTileAtSilent(x, y, new Tile(TerrainType.Empty));
+                    }
+                }
+            }
+
+            // Create diggable neck passage (player must dig through this)
+            for (int y = neckStartY; y > neckEndY && y > 0; y--)
             {
                 for (int dx = -entranceNeckWidth / 2; dx <= entranceNeckWidth / 2; dx++)
                 {
@@ -152,10 +173,11 @@ namespace DigDigDiner
                 }
             }
 
-            Vector2Int entranceBottom = new Vector2Int(centerX, endY);
+            Vector2Int entranceBottom = new Vector2Int(centerX, neckEndY);
+            Vector2Int spawnPosition = new Vector2Int(centerX, topY - 1);
 
             if (showDebugLogs)
-                Debug.Log($"MapGenerator: Entrance at {entranceBottom}");
+                Debug.Log($"MapGenerator: Spawn area at {spawnPosition}, diggable neck from {neckStartY} to {neckEndY}");
 
             return entranceBottom;
         }
