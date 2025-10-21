@@ -4,39 +4,59 @@ using System.Collections.Generic;
 namespace DigDigDiner
 {
     /// <summary>
-    /// Generates a playable cavern map using graph-based approach with A* pathfinding.
-    /// Creates random caverns connected by tunnels with biome-specific characteristics.
+    /// Modular map generator that uses blob-based generation.
+    /// Creates a playable map filled with Diggable tiles and pockets of Empty/Undiggable terrain.
+    /// Supports multiple generation strategies through configurable blob spawners.
     /// </summary>
     [RequireComponent(typeof(DualGridSystem))]
     public class MapGenerator : MonoBehaviour
     {
-        [Header("Generation Settings")]
-        [SerializeField] private int numberOfCaverns = 4;
-        [SerializeField] private int minCavernSpacing = 6;
+        [Header("Generation Strategy")]
+        [SerializeField] private GenerationMode generationMode = GenerationMode.BlobMap;
 
         [Header("Entrance Settings")]
         [SerializeField] private int entranceNeckWidth = 2;
         [SerializeField] private int entranceNeckLength = 3;
         [SerializeField] private int spawnAreaHeight = 2;
 
-        [Header("Advanced Settings")]
-        [SerializeField] private int maxPlacementAttempts = 100;
-        [SerializeField] private int extraConnections = 1;
+        [Header("Biome Settings")]
+        [SerializeField] private int biomeRegionCount = 4;
+        [SerializeField] private float biomeMinSpacing = 8f;
+
+        [Header("Blob Spawn Configurations")]
+        [SerializeField] private List<BlobSpawner.BlobSpawnConfig> emptyPocketConfigs = new List<BlobSpawner.BlobSpawnConfig>();
+        [SerializeField] private List<BlobSpawner.BlobSpawnConfig> undiggablePocketConfigs = new List<BlobSpawner.BlobSpawnConfig>();
 
         [Header("Debug")]
         [SerializeField] private bool showDebugLogs = true;
-        [SerializeField] private bool showGraphDebug = false;
+        [SerializeField] private bool showBiomeGizmos = false;
 
         private DualGridSystem gridSystem;
-        private MapGraph mapGraph;
-        private AStarPathfinder pathfinder;
+        private BlobSpawner blobSpawner;
+        private BiomeManager biomeManager;
         private System.Random random;
+
+        public enum GenerationMode
+        {
+            BlobMap,      // New blob-based generation
+            CavernMap     // Old cavern-based generation (moved to Old folder)
+        }
 
         private void Awake()
         {
             gridSystem = GetComponent<DualGridSystem>();
-            mapGraph = new MapGraph();
             random = new System.Random();
+
+            // Initialize default configurations if empty
+            if (emptyPocketConfigs.Count == 0)
+            {
+                InitializeDefaultEmptyConfigs();
+            }
+
+            if (undiggablePocketConfigs.Count == 0)
+            {
+                InitializeDefaultUndiggableConfigs();
+            }
         }
 
         private void Start()
@@ -45,77 +65,86 @@ namespace DigDigDiner
         }
 
         /// <summary>
-        /// Main map generation entry point using graph-based approach.
+        /// Main map generation entry point.
         /// </summary>
         public void GenerateMap()
         {
             if (showDebugLogs)
-                Debug.Log("MapGenerator: Starting graph-based map generation...");
+                Debug.Log($"MapGenerator: Starting {generationMode} generation...");
 
-            // Initialize pathfinder
-            pathfinder = new AStarPathfinder(gridSystem.Width, gridSystem.Height);
+            switch (generationMode)
+            {
+                case GenerationMode.BlobMap:
+                    GenerateBlobMap();
+                    break;
 
-            // Clear previous generation
-            mapGraph.Clear();
+                case GenerationMode.CavernMap:
+                    Debug.LogWarning("MapGenerator: CavernMap generation has been moved to Generation/Old/. Please use BlobMap mode.");
+                    GenerateBlobMap(); // Fallback to blob map
+                    break;
+            }
 
-            // Step 1: Fill with undiggable terrain
-            FillWithUndiggableTerrain();
+            if (showDebugLogs)
+                Debug.Log("MapGenerator: Generation complete!");
+        }
 
-            // Step 2: Create border
+        /// <summary>
+        /// Generates a blob-based map with configurable pockets of terrain.
+        /// </summary>
+        private void GenerateBlobMap()
+        {
+            // Step 1: Fill with Diggable terrain as base
+            FillWithDiggableTerrain();
+
+            // Step 2: Create border (Undiggable)
             GenerateBorder();
 
-            // Step 3: Generate entrance
-            Vector2Int entrancePos = GenerateEntranceNeck();
-            mapGraph.EntrancePosition = entrancePos;
+            // Step 3: Generate entrance with spawn area
+            GenerateEntranceNeck();
 
-            // Step 4: Randomly place caverns
-            PlaceCavernsRandomly();
+            // Step 4: Initialize blob spawner
+            blobSpawner = new BlobSpawner(gridSystem, random);
 
-            // Step 5: Build graph connections (MST + extra connections)
-            BuildGraphConnections();
+            // Step 5: Spawn Empty pockets (rooms, chambers, open areas)
+            foreach (var config in emptyPocketConfigs)
+            {
+                blobSpawner.SpawnBlobs(config, showDebugLogs);
+            }
 
-            // Step 6: Connect entrance to nearest cavern
-            ConnectEntranceToCaverns(entrancePos);
+            // Step 6: Spawn Undiggable pockets (obstacles, pillars, walls)
+            foreach (var config in undiggablePocketConfigs)
+            {
+                blobSpawner.SpawnBlobs(config, showDebugLogs);
+            }
 
-            // Step 7: Generate tunnels using A* pathfinding
-            GenerateTunnelsWithPathfinding();
+            // Step 7: Initialize biome manager and assign regional biomes
+            biomeManager = new BiomeManager(gridSystem, random);
+            biomeManager.GenerateBiomeRegions(biomeRegionCount, biomeMinSpacing);
 
-            // Step 8: Generate caverns with randomized tiles
-            GenerateCavernsWithRandomTiles();
-
-            // Step 9: Validate connectivity
-            ValidateConnectivity();
-
-            // Step 10: Refresh visuals
+            // Step 8: Refresh visual tiles
             gridSystem.RefreshAllVisualTiles();
 
             if (showDebugLogs)
             {
-                Debug.Log($"MapGenerator: Generation complete!");
-                Debug.Log(mapGraph.GetDebugInfo());
-            }
-
-            if (showGraphDebug)
-            {
-                LogGraphStructure();
+                Debug.Log($"MapGenerator: Blob map complete with {emptyPocketConfigs.Count} empty configs and {undiggablePocketConfigs.Count} obstacle configs");
             }
         }
 
         /// <summary>
-        /// Fills the entire map with undiggable terrain as a base.
+        /// Fills the entire map with diggable terrain as the base layer.
         /// </summary>
-        private void FillWithUndiggableTerrain()
+        private void FillWithDiggableTerrain()
         {
             for (int y = 0; y < gridSystem.Height; y++)
             {
                 for (int x = 0; x < gridSystem.Width; x++)
                 {
-                    gridSystem.SetTileAtSilent(x, y, new Tile(TerrainType.Undiggable));
+                    gridSystem.SetTileAtSilent(x, y, new Tile(TerrainType.Diggable));
                 }
             }
 
             if (showDebugLogs)
-                Debug.Log("MapGenerator: Filled map with undiggable terrain");
+                Debug.Log("MapGenerator: Filled map with Diggable terrain");
         }
 
         /// <summary>
@@ -134,6 +163,9 @@ namespace DigDigDiner
                 gridSystem.SetTileAtSilent(0, y, new Tile(TerrainType.Undiggable));
                 gridSystem.SetTileAtSilent(gridSystem.Width - 1, y, new Tile(TerrainType.Undiggable));
             }
+
+            if (showDebugLogs)
+                Debug.Log("MapGenerator: Created undiggable border");
         }
 
         /// <summary>
@@ -147,7 +179,14 @@ namespace DigDigDiner
             int neckStartY = topY - spawnAreaHeight;
             int neckEndY = neckStartY - entranceNeckLength;
 
+            if (showDebugLogs)
+            {
+                Debug.Log($"MapGenerator: Entrance generation - CenterX:{centerX}, TopY:{topY}, NeckStartY:{neckStartY}, NeckEndY:{neckEndY}");
+                Debug.Log($"MapGenerator: Entrance width: {entranceNeckWidth}, spawn height: {spawnAreaHeight}, neck length: {entranceNeckLength}");
+            }
+
             // Create empty spawn area at the top (player spawns here)
+            int emptyTilesCreated = 0;
             for (int y = topY; y > neckStartY && y >= 0; y--)
             {
                 for (int dx = -entranceNeckWidth / 2; dx <= entranceNeckWidth / 2; dx++)
@@ -156,11 +195,17 @@ namespace DigDigDiner
                     if (x >= 0 && x < gridSystem.Width)
                     {
                         gridSystem.SetTileAtSilent(x, y, new Tile(TerrainType.Empty));
+                        emptyTilesCreated++;
+                        if (showDebugLogs)
+                            Debug.Log($"MapGenerator: Created Empty tile at ({x}, {y})");
                     }
                 }
             }
 
-            // Create diggable neck passage (player must dig through this)
+            if (showDebugLogs)
+                Debug.Log($"MapGenerator: Created {emptyTilesCreated} Empty spawn tiles");
+
+            // Create diggable neck passage (player may dig through this to access map)
             for (int y = neckStartY; y > neckEndY && y > 0; y--)
             {
                 for (int dx = -entranceNeckWidth / 2; dx <= entranceNeckWidth / 2; dx++)
@@ -183,277 +228,86 @@ namespace DigDigDiner
         }
 
         /// <summary>
-        /// Randomly places caverns with minimum spacing constraint.
+        /// Initializes default Empty pocket configurations.
         /// </summary>
-        private void PlaceCavernsRandomly()
+        private void InitializeDefaultEmptyConfigs()
         {
-            int placedCount = 0;
-            int attempts = 0;
-
-            while (placedCount < numberOfCaverns && attempts < maxPlacementAttempts)
+            // Large open chambers
+            emptyPocketConfigs.Add(new BlobSpawner.BlobSpawnConfig
             {
-                attempts++;
+                configName = "Large Chambers",
+                terrainType = TerrainType.Empty,
+                minCount = 3,
+                maxCount = 5,
+                minSpacing = 6,
+                spawnProbability = 1.0f,
+                largeBlobWeight = 0.8f,
+                snakeBlobWeight = 0.2f
+            });
 
-                // Random position (avoid edges)
-                int x = random.Next(minCavernSpacing, gridSystem.Width - minCavernSpacing);
-                int y = random.Next(minCavernSpacing, gridSystem.Height - minCavernSpacing - entranceNeckLength);
-
-                Vector2Int center = new Vector2Int(x, y);
-
-                // Check spacing from existing caverns
-                if (!IsValidCavernPlacement(center))
-                    continue;
-
-                // Select random biome
-                Biome biome = Biome.AllBiomes[random.Next(Biome.AllBiomes.Length)];
-
-                // Random radius from biome range
-                int radius = random.Next(biome.MinRadius, biome.MaxRadius + 1);
-
-                // Add to graph
-                mapGraph.AddCavern(center, radius, biome);
-                placedCount++;
-
-                if (showDebugLogs)
-                    Debug.Log($"MapGenerator: Placed cavern {placedCount} at {center} ({biome.Name}, R={radius})");
-            }
-
-            if (placedCount < numberOfCaverns)
+            // Snake-like tunnels
+            emptyPocketConfigs.Add(new BlobSpawner.BlobSpawnConfig
             {
-                Debug.LogWarning($"MapGenerator: Only placed {placedCount}/{numberOfCaverns} caverns after {attempts} attempts");
-            }
+                configName = "Winding Tunnels",
+                terrainType = TerrainType.Empty,
+                minCount = 2,
+                maxCount = 4,
+                minSpacing = 4,
+                spawnProbability = 0.8f,
+                largeBlobWeight = 0.2f,
+                snakeBlobWeight = 0.8f
+            });
         }
 
         /// <summary>
-        /// Checks if a cavern can be placed at the given position.
+        /// Initializes default Undiggable pocket configurations.
         /// </summary>
-        private bool IsValidCavernPlacement(Vector2Int position)
+        private void InitializeDefaultUndiggableConfigs()
         {
-            foreach (var node in mapGraph.Nodes)
+            // Large obstacles/pillars
+            undiggablePocketConfigs.Add(new BlobSpawner.BlobSpawnConfig
             {
-                float distance = Vector2Int.Distance(position, node.Center);
-                if (distance < minCavernSpacing)
-                    return false;
-            }
-            return true;
+                configName = "Stone Pillars",
+                terrainType = TerrainType.Undiggable,
+                minCount = 2,
+                maxCount = 4,
+                minSpacing = 5,
+                spawnProbability = 0.7f,
+                largeBlobWeight = 0.9f,
+                snakeBlobWeight = 0.1f
+            });
+
+            // Narrow undiggable veins
+            undiggablePocketConfigs.Add(new BlobSpawner.BlobSpawnConfig
+            {
+                configName = "Rock Veins",
+                terrainType = TerrainType.Undiggable,
+                minCount = 1,
+                maxCount = 3,
+                minSpacing = 4,
+                spawnProbability = 0.5f,
+                largeBlobWeight = 0.1f,
+                snakeBlobWeight = 0.9f
+            });
         }
 
         /// <summary>
-        /// Builds graph connections using MST and adds extra random connections.
+        /// Gets the biome at a specific grid position.
         /// </summary>
-        private void BuildGraphConnections()
+        public Biome GetBiomeAt(int x, int y)
         {
-            if (mapGraph.Nodes.Count < 2)
-                return;
+            if (biomeManager != null)
+                return biomeManager.GetBiomeAt(x, y);
 
-            // Create minimum spanning tree for guaranteed connectivity
-            mapGraph.CreateMinimumSpanningTree();
-
-            // Add extra connections for loops
-            mapGraph.AddRandomConnections(extraConnections);
-
-            if (showDebugLogs)
-                Debug.Log($"MapGenerator: Created {mapGraph.Edges.Count} tunnel connections");
+            return Biome.AllBiomes[0]; // Default fallback
         }
 
         /// <summary>
-        /// Connects the entrance to the nearest cavern.
+        /// Gets the biome manager for external access.
         /// </summary>
-        private void ConnectEntranceToCaverns(Vector2Int entrancePos)
+        public BiomeManager GetBiomeManager()
         {
-            var nearestCavern = mapGraph.FindNearestCavern(entrancePos);
-            if (nearestCavern == null)
-            {
-                Debug.LogError("MapGenerator: No caverns to connect to entrance!");
-                return;
-            }
-
-            // Find path from entrance to cavern center
-            var path = pathfinder.FindPath(entrancePos, nearestCavern.Center, pos => true);
-
-            if (path != null)
-            {
-                // Carve entrance tunnel
-                foreach (var pos in path)
-                {
-                    CarveDiggableTunnel(pos.x, pos.y, 1);
-                }
-
-                if (showDebugLogs)
-                    Debug.Log($"MapGenerator: Connected entrance to cavern {nearestCavern.NodeId}");
-            }
-            else
-            {
-                Debug.LogError("MapGenerator: Failed to find path from entrance to cavern!");
-            }
-        }
-
-        /// <summary>
-        /// Generates all tunnels using A* pathfinding.
-        /// </summary>
-        private void GenerateTunnelsWithPathfinding()
-        {
-            foreach (var edge in mapGraph.Edges)
-            {
-                // Find path from one cavern center to another
-                var path = pathfinder.FindPath(edge.StartNode.Center, edge.EndNode.Center, pos => true);
-
-                if (path != null)
-                {
-                    edge.SetPath(path);
-
-                    // Use biome tunnel width (average of both caverns)
-                    int width = (edge.StartNode.Biome.TunnelWidth + edge.EndNode.Biome.TunnelWidth) / 2;
-
-                    // Carve tunnel with randomized tiles
-                    foreach (var pos in path)
-                    {
-                        CarveRandomizedTunnel(pos.x, pos.y, width, edge.StartNode.Biome);
-                    }
-
-                    if (showDebugLogs)
-                        Debug.Log($"MapGenerator: Tunnel {edge.StartNode.NodeId}->{edge.EndNode.NodeId}: {path.Count} tiles");
-                }
-                else
-                {
-                    Debug.LogWarning($"MapGenerator: Failed to find path between caverns {edge.StartNode.NodeId} and {edge.EndNode.NodeId}");
-                }
-            }
-        }
-
-        /// <summary>
-        /// Generates caverns with randomized tile composition based on biome.
-        /// </summary>
-        private void GenerateCavernsWithRandomTiles()
-        {
-            foreach (var cavern in mapGraph.Nodes)
-            {
-                int centerX = cavern.Center.x;
-                int centerY = cavern.Center.y;
-                int radius = cavern.Radius;
-                Biome biome = cavern.Biome;
-
-                // Create cavern area
-                for (int y = centerY - radius; y <= centerY + radius; y++)
-                {
-                    for (int x = centerX - radius; x <= centerX + radius; x++)
-                    {
-                        if (x <= 0 || x >= gridSystem.Width - 1 || y <= 0 || y >= gridSystem.Height - 1)
-                            continue;
-
-                        float distance = Vector2.Distance(new Vector2(x, y), new Vector2(centerX, centerY));
-
-                        if (distance <= radius)
-                        {
-                            // Inside cavern - use randomized tiles based on biome
-                            TerrainType tileType = GetRandomCavernTile(biome, distance, radius);
-                            gridSystem.SetTileAtSilent(x, y, new Tile(tileType));
-                        }
-                    }
-                }
-            }
-        }
-
-        /// <summary>
-        /// Gets a random tile type for cavern based on biome and distance from center.
-        /// </summary>
-        private TerrainType GetRandomCavernTile(Biome biome, float distanceFromCenter, float radius)
-        {
-            // Center area: more empty tiles
-            // Edge area: more obstacles
-
-            float normalizedDistance = distanceFromCenter / radius;
-            float emptyWeight = biome.EmptyTileRatio * (1.5f - normalizedDistance);
-            float diggableWeight = biome.DiggableTileRatio;
-            float undiggableWeight = biome.UndiggableTileRatio * normalizedDistance;
-
-            float totalWeight = emptyWeight + diggableWeight + undiggableWeight;
-            float roll = (float)random.NextDouble() * totalWeight;
-
-            if (roll < emptyWeight)
-                return TerrainType.Empty;
-            else if (roll < emptyWeight + diggableWeight)
-                return TerrainType.Diggable;
-            else
-                return TerrainType.Undiggable;
-        }
-
-        /// <summary>
-        /// Carves a tunnel segment with randomized tiles.
-        /// </summary>
-        private void CarveRandomizedTunnel(int centerX, int centerY, int width, Biome biome)
-        {
-            for (int dy = -width; dy <= width; dy++)
-            {
-                for (int dx = -width; dx <= width; dx++)
-                {
-                    int x = centerX + dx;
-                    int y = centerY + dy;
-
-                    if (x <= 0 || x >= gridSystem.Width - 1 || y <= 0 || y >= gridSystem.Height - 1)
-                        continue;
-
-                    // Randomize between empty and diggable based on biome
-                    float roll = (float)random.NextDouble();
-                    TerrainType tileType = roll < biome.TunnelDiggableRatio
-                        ? TerrainType.Diggable
-                        : TerrainType.Empty;
-
-                    gridSystem.SetTileAtSilent(x, y, new Tile(tileType));
-                }
-            }
-        }
-
-        /// <summary>
-        /// Carves a simple diggable tunnel (used for entrance connection).
-        /// </summary>
-        private void CarveDiggableTunnel(int centerX, int centerY, int width)
-        {
-            for (int dy = -width; dy <= width; dy++)
-            {
-                for (int dx = -width; dx <= width; dx++)
-                {
-                    int x = centerX + dx;
-                    int y = centerY + dy;
-
-                    if (x <= 0 || x >= gridSystem.Width - 1 || y <= 0 || y >= gridSystem.Height - 1)
-                        continue;
-
-                    gridSystem.SetTileAtSilent(x, y, new Tile(TerrainType.Diggable));
-                }
-            }
-        }
-
-        /// <summary>
-        /// Validates that all parts of the map are connected.
-        /// </summary>
-        private void ValidateConnectivity()
-        {
-            bool graphConnected = mapGraph.IsFullyConnected();
-
-            if (showDebugLogs)
-            {
-                if (graphConnected)
-                    Debug.Log("MapGenerator: Graph is fully connected!");
-                else
-                    Debug.LogWarning("MapGenerator: Graph has disconnected components!");
-            }
-        }
-
-        /// <summary>
-        /// Logs detailed graph structure for debugging.
-        /// </summary>
-        private void LogGraphStructure()
-        {
-            Debug.Log("=== MAP GRAPH STRUCTURE ===");
-            foreach (var node in mapGraph.Nodes)
-            {
-                Debug.Log(node.ToString());
-            }
-            foreach (var edge in mapGraph.Edges)
-            {
-                Debug.Log(edge.ToString());
-            }
+            return biomeManager;
         }
 
         /// <summary>
@@ -464,5 +318,17 @@ namespace DigDigDiner
         {
             GenerateMap();
         }
+
+#if UNITY_EDITOR
+        private void OnDrawGizmos()
+        {
+            if (!Application.isPlaying || !showBiomeGizmos) return;
+
+            if (biomeManager != null)
+            {
+                biomeManager.DrawGizmos();
+            }
+        }
+#endif
     }
 }

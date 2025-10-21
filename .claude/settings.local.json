@@ -1,12 +1,12 @@
 {
   "permissions": {
     "allow": [
-      "Bash(for file in Tiles/*.cs)",
-      "Bash(done)",
-      "Bash(for file in Input/*.cs)",
-      "Bash(tree -L 2)",
-      "Bash(for file in *.cs)",
-      "Bash(do sed -i 's/namespace MiningGame/namespace DigDigDiner/g' \"$file\")"
+      "Bash(mkdir -p \"Generation/Old\")",
+      "Bash(mv \"Generation/MapGenerator.cs\" \"Generation/Old/MapGenerator_Cavern.cs\")",
+      "Bash(mv \"Graph/CavernNode.cs\" \"Generation/Old/\")",
+      "Bash(mv \"Graph/MapGraph.cs\" \"Generation/Old/\")",
+      "Bash(mv \"Graph/TunnelEdge.cs\" \"Generation/Old/\")",
+      "Read(//c/Users/thesa/Desktop/Unity Projects/Tile Party/Assets/**)"
     ],
     "deny": [],
     "ask": []

@@ -1,27 +1,32 @@
+using UnityEngine;
+
 namespace DigDigDiner
 {
     /// <summary>
-    /// Represents a biome type for cavern chambers.
-    /// Each biome defines unique generation parameters and gameplay characteristics.
+    /// Represents a biome type for map regions.
+    /// Each biome defines unique characteristics that can be used by artists for shader customization.
+    /// Biomes identify regions of the map but do NOT specify colors - that's left to the artist.
     /// </summary>
     public class Biome
     {
         public string Name { get; private set; }
+        public int BiomeID { get; private set; } // Unique ID for shader lookup
 
-        // Cavern size properties
+        // Cavern size properties (legacy, kept for potential future use)
         public int MinRadius { get; set; }
         public int MaxRadius { get; set; }
 
-        // Tile composition ratios (should sum to ~1.0)
+        // Tile composition ratios (legacy, kept for potential future use)
         public float EmptyTileRatio { get; set; }
         public float DiggableTileRatio { get; set; }
         public float UndiggableTileRatio { get; set; }
 
-        // Tunnel properties
+        // Tunnel properties (legacy, kept for potential future use)
         public int TunnelWidth { get; set; }
-        public float TunnelDiggableRatio { get; set; } // Ratio of diggable vs empty in tunnels
+        public float TunnelDiggableRatio { get; set; }
 
         public Biome(string name,
+                     int biomeID,
                      int minRadius = 2,
                      int maxRadius = 4,
                      float emptyRatio = 0.6f,
@@ -31,6 +36,7 @@ namespace DigDigDiner
                      float tunnelDiggableRatio = 0.5f)
         {
             Name = name;
+            BiomeID = biomeID;
             MinRadius = minRadius;
             MaxRadius = maxRadius;
             EmptyTileRatio = emptyRatio;
@@ -40,12 +46,14 @@ namespace DigDigDiner
             TunnelDiggableRatio = tunnelDiggableRatio;
         }
 
-        // Predefined biome types with distinct characteristics
+        // Predefined biome types
+        // BiomeID is used by shaders to identify regions - artists map IDs to colors
         public static readonly Biome Apple = new Biome(
             name: "Apple",
+            biomeID: 0,
             minRadius: 2,
             maxRadius: 4,
-            emptyRatio: 0.7f,      // Open and spacious
+            emptyRatio: 0.7f,
             diggableRatio: 0.2f,
             undiggableRatio: 0.1f,
             tunnelWidth: 1,
@@ -54,9 +62,10 @@ namespace DigDigDiner
 
         public static readonly Biome Orange = new Biome(
             name: "Orange",
+            biomeID: 1,
             minRadius: 3,
             maxRadius: 5,
-            emptyRatio: 0.5f,      // Balanced
+            emptyRatio: 0.5f,
             diggableRatio: 0.4f,
             undiggableRatio: 0.1f,
             tunnelWidth: 1,
@@ -65,9 +74,10 @@ namespace DigDigDiner
 
         public static readonly Biome Banana = new Biome(
             name: "Banana",
+            biomeID: 2,
             minRadius: 2,
             maxRadius: 3,
-            emptyRatio: 0.4f,      // More obstacles
+            emptyRatio: 0.4f,
             diggableRatio: 0.4f,
             undiggableRatio: 0.2f,
             tunnelWidth: 1,
@@ -76,12 +86,13 @@ namespace DigDigDiner
 
         public static readonly Biome Grape = new Biome(
             name: "Grape",
+            biomeID: 3,
             minRadius: 4,
             maxRadius: 6,
-            emptyRatio: 0.6f,      // Large and open
+            emptyRatio: 0.6f,
             diggableRatio: 0.3f,
             undiggableRatio: 0.1f,
-            tunnelWidth: 2,         // Wider tunnels
+            tunnelWidth: 2,
             tunnelDiggableRatio: 0.7f
         );
 
@@ -90,7 +101,7 @@ namespace DigDigDiner
 
         public override string ToString()
         {
-            return $"{Name} (R:{MinRadius}-{MaxRadius}, E:{EmptyTileRatio:P0} D:{DiggableTileRatio:P0} U:{UndiggableTileRatio:P0})";
+            return $"{Name} (ID:{BiomeID})";
         }
     }
 }
