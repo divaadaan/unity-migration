@@ -247,12 +247,14 @@ namespace DigDigDiner
             // Handle all-empty pattern (null) vs mapped patterns
             if (!artistPos.HasValue)
             {
+                // All corners are empty - clear both tilemaps or use empty tile
                 colorTile = emptyTile;
+                normalTile = null; // Explicitly null to clear normal map
             }
             else
             {
                 int tileIndex = (SharedConstants.TILEMAP_ROWS - 1 - artistPos.Value.y) * SharedConstants.TILEMAP_COLUMNS + artistPos.Value.x;
-                
+
                 if (tileIndex >= 0 && tileIndex < artistColorTiles.Length)
                 {
                     colorTile = artistColorTiles[tileIndex];
@@ -260,15 +262,15 @@ namespace DigDigDiner
                         normalTile = artistNormalTiles[tileIndex];
                 }
             }
-            
-            // Set tiles in tilemaps
+
+            // Set tiles in tilemaps (null clears the tile)
             Vector3Int tilePos = new Vector3Int(visualX, visualY, 0);
-            
-            if (colorTilemap != null && colorTile != null)
-                colorTilemap.SetTile(tilePos, colorTile);
-            
-            if (normalTilemap != null && normalTile != null)
-                normalTilemap.SetTile(tilePos, normalTile);
+
+            if (colorTilemap != null)
+                colorTilemap.SetTile(tilePos, colorTile); // null or emptyTile clears it
+
+            if (normalTilemap != null)
+                normalTilemap.SetTile(tilePos, normalTile); // null clears it
         }
         
         private void UpdateAffectedVisualTiles(int baseX, int baseY)

@@ -128,7 +128,7 @@ namespace DigDigDiner
             }
             
             Debug.LogWarning($"TileMapping: No mapping found for pattern {key}");
-            return Vector2Int.zero;
+            return null;
         }
         
         public Vector2Int? GetArtistPositionFromTiles(Tile topLeft, Tile topRight, Tile bottomLeft, Tile bottomRight)
