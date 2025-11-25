@@ -4,9 +4,8 @@ using System.Collections.Generic;
 namespace DigDigDiner
 {
     /// <summary>
-    /// Modular map generator that uses blob-based generation.
-    /// Creates a playable map filled with Diggable tiles and pockets of Empty/Undiggable terrain.
-    /// Supports multiple generation strategies through configurable blob spawners.
+    /// Modular map generator that uses blob-based generation for structure.
+    /// Biome visuals are handled entirely by the Shader (World Position -> Biome Map -> LUT).
     /// </summary>
     [RequireComponent(typeof(DualGridSystem))]
     public class MapGenerator : MonoBehaviour
@@ -19,21 +18,15 @@ namespace DigDigDiner
         [SerializeField] private int entranceNeckLength = 3;
         [SerializeField] private int spawnAreaHeight = 2;
 
-        [Header("Biome Settings")]
-        [SerializeField] private int biomeRegionCount = 4;
-        [SerializeField] private float biomeMinSpacing = 8f;
-
         [Header("Blob Spawn Configurations")]
         [SerializeField] private List<BlobSpawner.BlobSpawnConfig> emptyPocketConfigs = new List<BlobSpawner.BlobSpawnConfig>();
         [SerializeField] private List<BlobSpawner.BlobSpawnConfig> undiggablePocketConfigs = new List<BlobSpawner.BlobSpawnConfig>();
 
         [Header("Debug")]
         [SerializeField] private bool showDebugLogs = true;
-        [SerializeField] private bool showBiomeGizmos = false;
 
         private DualGridSystem gridSystem;
         private BlobSpawner blobSpawner;
-        private BiomeManager biomeManager;
         private System.Random random;
 
         public enum GenerationMode
@@ -117,11 +110,9 @@ namespace DigDigDiner
                 blobSpawner.SpawnBlobs(config, showDebugLogs);
             }
 
-            // Step 7: Initialize biome manager and assign regional biomes
-            biomeManager = new BiomeManager(gridSystem, random);
-            biomeManager.GenerateBiomeRegions(biomeRegionCount, biomeMinSpacing);
-
-            // Step 8: Refresh visual tiles
+            // Step 7: Refresh visual tiles
+            // This will place the "Artist Color Tiles" (Sprites) onto the Tilemap.
+            // The Shader assigned to the TilemapRenderer will then color them based on World Position.
             gridSystem.RefreshAllVisualTiles();
 
             if (showDebugLogs)
@@ -292,25 +283,6 @@ namespace DigDigDiner
         }
 
         /// <summary>
-        /// Gets the biome at a specific grid position.
-        /// </summary>
-        public Biome GetBiomeAt(int x, int y)
-        {
-            if (biomeManager != null)
-                return biomeManager.GetBiomeAt(x, y);
-
-            return Biome.AllBiomes[0]; // Default fallback
-        }
-
-        /// <summary>
-        /// Gets the biome manager for external access.
-        /// </summary>
-        public BiomeManager GetBiomeManager()
-        {
-            return biomeManager;
-        }
-
-        /// <summary>
         /// Context menu command to regenerate the map.
         /// </summary>
         [ContextMenu("Regenerate Map")]
@@ -318,17 +290,5 @@ namespace DigDigDiner
         {
             GenerateMap();
         }
-
-#if UNITY_EDITOR
-        private void OnDrawGizmos()
-        {
-            if (!Application.isPlaying || !showBiomeGizmos) return;
-
-            if (biomeManager != null)
-            {
-                biomeManager.DrawGizmos();
-            }
-        }
-#endif
     }
 }

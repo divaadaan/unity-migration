@@ -12,13 +12,11 @@ namespace DigDigDiner
         
         [Header("Tilemap References")]
         [SerializeField] private Tilemap colorTilemap;
-        [SerializeField] private Tilemap normalTilemap;
         [SerializeField] private Tilemap debugTilemap;
         
         [Header("Tile Assets")]
         [SerializeField] private TileMapping tileMapping;
         [SerializeField] private TileBase[] artistColorTiles; 
-        [SerializeField] private TileBase[] artistNormalTiles;
         [SerializeField] private TileBase emptyTile; 
         
         [Header("Visual Settings")]
@@ -242,14 +240,11 @@ namespace DigDigDiner
             );
             
             TileBase colorTile = null;
-            TileBase normalTile = null;
             
             // Handle all-empty pattern (null) vs mapped patterns
             if (!artistPos.HasValue)
             {
-                // All corners are empty - clear both tilemaps or use empty tile
                 colorTile = emptyTile;
-                normalTile = null; // Explicitly null to clear normal map
             }
             else
             {
@@ -258,8 +253,6 @@ namespace DigDigDiner
                 if (tileIndex >= 0 && tileIndex < artistColorTiles.Length)
                 {
                     colorTile = artistColorTiles[tileIndex];
-                    if (artistNormalTiles != null && tileIndex < artistNormalTiles.Length)
-                        normalTile = artistNormalTiles[tileIndex];
                 }
             }
 
@@ -268,9 +261,6 @@ namespace DigDigDiner
 
             if (colorTilemap != null)
                 colorTilemap.SetTile(tilePos, colorTile); // null or emptyTile clears it
-
-            if (normalTilemap != null)
-                normalTilemap.SetTile(tilePos, normalTile); // null clears it
         }
         
         private void UpdateAffectedVisualTiles(int baseX, int baseY)
@@ -291,7 +281,6 @@ namespace DigDigDiner
         public void RefreshAllVisualTiles()
         {
             if (colorTilemap != null) colorTilemap.ClearAllTiles();
-            if (normalTilemap != null) normalTilemap.ClearAllTiles();
 
             // Only draw visual tiles up to gridWidth-1 and gridHeight-1
             // to avoid sampling out-of-bounds at top and right edges
