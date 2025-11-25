@@ -4,7 +4,6 @@ namespace DigDigDiner
 {
     /// <summary>
     /// Camera that smoothly follows the player with boundary constraints.
-    /// Keeps the player centered on screen while respecting map boundaries.
     /// </summary>
     [RequireComponent(typeof(Camera))]
     public class PlayerCamera : MonoBehaviour
@@ -27,37 +26,42 @@ namespace DigDigDiner
         private void Awake()
         {
             cam = GetComponent<Camera>();
+        }
 
-            // Find player if not assigned
+        private void Start()
+        {
+            // 1. Find Player if missing
             if (player == null)
             {
                 player = FindFirstObjectByType<Player>();
-            }
-
-            if (player == null)
-            {
-                Debug.LogError("PlayerCamera: No Player found in scene!");
-                enabled = false;
-                return;
+                if (player == null)
+                {
+                    Debug.LogError("PlayerCamera: No Player found in scene!");
+                    enabled = false;
+                    return;
+                }
             }
 
             gridSystem = player.GridSystem;
 
             if (gridSystem == null)
             {
-                Debug.LogError("PlayerCamera: No DualGridSystem found!");
-                enabled = false;
-                return;
+                gridSystem = FindFirstObjectByType<DualGridSystem>();
+                
+                if (gridSystem == null)
+                {
+                    Debug.LogError("PlayerCamera: No DualGridSystem found! Camera disabled.");
+                    enabled = false;
+                    return;
+                }
             }
-        }
 
-        private void Start()
-        {
             CalculateCameraBounds();
 
-            // Immediately position camera at player position (no smoothing on start)
             Vector3 targetPosition = GetTargetPosition();
             transform.position = targetPosition;
+            
+            Debug.Log($"PlayerCamera: Initialized. Tracking player at {player.transform.position}");
         }
 
         private void LateUpdate()
@@ -78,6 +82,8 @@ namespace DigDigDiner
 
         private Vector3 GetTargetPosition()
         {
+            if (player == null) return transform.position;
+
             Vector3 targetPosition = player.transform.position;
             targetPosition.z = SharedConstants.PLAYER_CAMERA_OFFSET_Z;
 
@@ -103,7 +109,6 @@ namespace DigDigDiner
             float halfHeight = cameraHeight / 2f;
 
             // Calculate bounds based on grid size
-            // Grid goes from 0 to Width/Height, but we want to center camera on tiles
             minX = halfWidth - boundPadding;
             maxX = gridSystem.Width - halfWidth + boundPadding;
 
@@ -123,20 +128,14 @@ namespace DigDigDiner
                 minY = maxY = centerY;
             }
 
-            Debug.Log($"PlayerCamera: Bounds calculated - X:[{minX}, {maxX}], Y:[{minY}, {maxY}]");
+            Debug.Log($"PlayerCamera: Bounds calculated - X:[{minX:F2}, {maxX:F2}], Y:[{minY:F2}, {maxY:F2}]");
         }
 
-        /// <summary>
-        /// Recalculates camera bounds. Call this if grid size changes.
-        /// </summary>
         public void RecalculateBounds()
         {
             CalculateCameraBounds();
         }
 
-        /// <summary>
-        /// Sets the player target for the camera to follow.
-        /// </summary>
         public void SetTarget(Player newPlayer)
         {
             player = newPlayer;
@@ -152,9 +151,7 @@ namespace DigDigDiner
         {
             if (!Application.isPlaying || !constrainToBounds) return;
 
-            // Draw camera bounds
             Gizmos.color = Color.cyan;
-
             Vector3 bottomLeft = new Vector3(minX, minY, 0);
             Vector3 bottomRight = new Vector3(maxX, minY, 0);
             Vector3 topLeft = new Vector3(minX, maxY, 0);

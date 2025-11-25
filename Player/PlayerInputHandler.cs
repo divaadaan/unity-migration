@@ -16,7 +16,8 @@ namespace DigDigDiner
         public void Initialize(Player playerController)
         {
             player = playerController;
-            lastMoveTime = -SharedConstants.PLAYER_MOVE_COOLDOWN; // Allow immediate first move
+            lastMoveTime = -SharedConstants.PLAYER_MOVE_COOLDOWN; 
+            Debug.Log("PlayerInputHandler: Initialized and ready.");
         }
 
         private void Awake()
@@ -34,15 +35,12 @@ namespace DigDigDiner
 
             inputActions.Enable();
             inputActions.GameplayMap.Dig.performed += OnDigPerformed;
+            Debug.Log("PlayerInputHandler: Input Actions Enabled.");
         }
 
         private void OnDisable()
         {
-            if (inputActions == null)
-            {
-                Debug.LogWarning("PlayerInputHandler: inputActions is null in OnDisable!");
-                return;
-            }
+            if (inputActions == null) return;
 
             inputActions.GameplayMap.Dig.performed -= OnDigPerformed;
             inputActions.Disable();
@@ -52,45 +50,46 @@ namespace DigDigDiner
         {
             if (player == null) return;
 
-            // Handle movement input (Arrow Keys via Input System)
+            // Debug log to prove Update is running
+            // (Uncomment if completely stuck, but might span console)
+            // Debug.Log("PlayerInputHandler: Update running");
+
             HandleMovementInput();
         }
 
         private void HandleMovementInput()
         {
-            // Check if enough time has passed since last move (for grid-based movement feel)
+            if (inputActions == null) return;
+
+            // 1. Read Raw Input
+            Vector2 moveInput = inputActions.GameplayMap.Move.ReadValue<Vector2>();
+
+            // Debug input if non-zero
+            if (moveInput != Vector2.zero)
+            {
+                // Debug.Log($"PlayerInputHandler: Raw Input {moveInput}");
+            }
+
+            // Check cooldown
             if (Time.time - lastMoveTime < SharedConstants.PLAYER_MOVE_COOLDOWN)
                 return;
 
-            if (inputActions == null)
-                return;
-
-            // Read movement input from Input System
-            Vector2 moveInput = inputActions.GameplayMap.Move.ReadValue<Vector2>();
-
-            // Convert to discrete directions (only one direction at a time)
             Vector2Int moveDirection = Vector2Int.zero;
 
             if (Mathf.Abs(moveInput.y) > Mathf.Abs(moveInput.x))
             {
-                // Vertical movement takes priority
-                if (moveInput.y > 0.5f)
-                    moveDirection = Vector2Int.up;
-                else if (moveInput.y < -0.5f)
-                    moveDirection = Vector2Int.down;
+                if (moveInput.y > 0.5f) moveDirection = Vector2Int.up;
+                else if (moveInput.y < -0.5f) moveDirection = Vector2Int.down;
             }
             else
             {
-                // Horizontal movement
-                if (moveInput.x > 0.5f)
-                    moveDirection = Vector2Int.right;
-                else if (moveInput.x < -0.5f)
-                    moveDirection = Vector2Int.left;
+                if (moveInput.x > 0.5f) moveDirection = Vector2Int.right;
+                else if (moveInput.x < -0.5f) moveDirection = Vector2Int.left;
             }
 
-            // If movement was attempted, try to move
             if (moveDirection != Vector2Int.zero)
             {
+                Debug.Log($"PlayerInputHandler: Attempting move {moveDirection}");
                 player.TryMove(moveDirection);
                 lastMoveTime = Time.time;
             }
@@ -98,6 +97,7 @@ namespace DigDigDiner
 
         private void OnDigPerformed(InputAction.CallbackContext context)
         {
+            Debug.Log("PlayerInputHandler: Dig action performed");
             if (player != null)
             {
                 player.TryDig();

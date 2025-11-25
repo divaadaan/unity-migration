@@ -31,8 +31,7 @@ namespace DigDigDiner
 
         public enum GenerationMode
         {
-            BlobMap,      // New blob-based generation
-            CavernMap     // Old cavern-based generation (moved to Old folder)
+            BlobMap     // New blob-based generation
         }
 
         private void Awake()
@@ -70,11 +69,6 @@ namespace DigDigDiner
                 case GenerationMode.BlobMap:
                     GenerateBlobMap();
                     break;
-
-                case GenerationMode.CavernMap:
-                    Debug.LogWarning("MapGenerator: CavernMap generation has been moved to Generation/Old/. Please use BlobMap mode.");
-                    GenerateBlobMap(); // Fallback to blob map
-                    break;
             }
 
             if (showDebugLogs)
@@ -86,34 +80,22 @@ namespace DigDigDiner
         /// </summary>
         private void GenerateBlobMap()
         {
-            // Step 1: Fill with Diggable terrain as base
             FillWithDiggableTerrain();
-
-            // Step 2: Create border (Undiggable)
             GenerateBorder();
-
-            // Step 3: Generate entrance with spawn area
             GenerateEntranceNeck();
 
-            // Step 4: Initialize blob spawner
             blobSpawner = new BlobSpawner(gridSystem, random);
-
-            // Step 5: Spawn Empty pockets (rooms, chambers, open areas)
             foreach (var config in emptyPocketConfigs)
             {
                 blobSpawner.SpawnBlobs(config, showDebugLogs);
             }
 
-            // Step 6: Spawn Undiggable pockets (obstacles, pillars, walls)
+            // Spawn Undiggable pockets
             foreach (var config in undiggablePocketConfigs)
             {
                 blobSpawner.SpawnBlobs(config, showDebugLogs);
             }
-
-            // Step 7: Refresh visual tiles
-            // This will place the "Artist Color Tiles" (Sprites) onto the Tilemap.
-            // The Shader assigned to the TilemapRenderer will then color them based on World Position.
-            gridSystem.RefreshAllVisualTiles();
+            gridSystem.CompleteInitialization();
 
             if (showDebugLogs)
             {

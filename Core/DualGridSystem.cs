@@ -36,6 +36,7 @@ namespace DigDigDiner
         
         public int Width => gridWidth;
         public int Height => gridHeight;
+        public bool IsInitialized { get; private set; } = false;
         
         private void Awake()
         {
@@ -91,7 +92,13 @@ namespace DigDigDiner
 
         private void Start()
         {
+        }
+
+        public void CompleteInitialization()
+        {
+            IsInitialized = true;
             RefreshAllVisualTiles();
+            Debug.Log("DualGridSystem: Initialization Finalized.");
         }
 
         private void OnTileEdit(InputAction.CallbackContext context)
@@ -182,7 +189,7 @@ namespace DigDigDiner
             {
                 return OUT_OF_BOUNDS_TILE;
             }
-            return baseGrid[y, x];
+            return baseGrid[y, x] ?? new Tile(TerrainType.Empty);
         }
         
         public void SetTileAt(int x, int y, Tile tile)
