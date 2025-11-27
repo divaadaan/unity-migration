@@ -14,8 +14,8 @@ namespace DigDigDiner
         public const int TOTAL_PATTERNS = 80;
         
         // Tile dimensions
-        public const int SOURCE_TILE_SIZE = 200;  // Artist tilemap in pixels
-        public const float RENDER_TILE_SIZE = 1.0f;  // Unity world units per tile
+        public const int SOURCE_TILE_SIZE = 200;  
+        public const float RENDER_TILE_SIZE = 1.0f; 
         
         // Visual offset (draw grid offset from base grid)
         public static readonly Vector2 VISUAL_OFFSET = new Vector2(-0.5f, -0.5f);
