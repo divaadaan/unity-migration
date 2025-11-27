@@ -53,14 +53,8 @@ namespace DigDigDiner
             tileMapping.Initialize();
             Debug.Log($"DualGridSystem: TileMapping initialized, checking dictionary...");
 
-            // Test immediate access
-            var testPos = tileMapping.GetArtistPosition(
-                TerrainType.Diggable, TerrainType.Diggable,
-                TerrainType.Diggable, TerrainType.Diggable
-            );
-            Debug.Log($"DualGridSystem: Test pattern (1,1,1,1) returned position {testPos}");
-
             inputActions = new TileEditorInputs();
+            AlignGrid();
             mainCamera = Camera.main;
         }
 
@@ -93,6 +87,18 @@ namespace DigDigDiner
         private void Start()
         {
         }
+
+private void AlignGrid()
+    {
+        if (colorTilemap != null && colorTilemap.layoutGrid != null)
+        {
+            Grid grid = colorTilemap.layoutGrid;
+            Vector3 currentPos = grid.transform.position;
+            grid.transform.position = new Vector3(visualOffset.x, visualOffset.y, currentPos.z);
+            
+            Debug.Log($"DualGridSystem: Aligned Grid to {grid.transform.position} using offset {visualOffset}");
+        }
+    }
 
         public void CompleteInitialization()
         {
