@@ -13,11 +13,12 @@ namespace DigDigDiner
         [Header("Tilemap References")]
         [SerializeField] private Tilemap colorTilemap;
         [SerializeField] private Tilemap debugTilemap;
+        // Optional: If you use a separate normal map tilemap in future, add it here.
+        // [SerializeField] private Tilemap normalTilemap; 
         
         [Header("Tile Assets")]
+        // We ONLY need the mapping now. The mapping holds the assets.
         [SerializeField] private TileMapping tileMapping;
-        [SerializeField] private TileBase[] artistColorTiles; 
-        [SerializeField] private TileBase emptyTile; 
         
         [Header("Visual Settings")]
         [SerializeField] private Vector2 visualOffset = SharedConstants.VISUAL_OFFSET;
@@ -45,13 +46,12 @@ namespace DigDigDiner
 
             if (tileMapping == null)
             {
-                Debug.LogError("DualGridSystem: tileMapping is NULL!");
+                Debug.LogError($"DualGridSystem ({name}): tileMapping is NULL!");
                 return;
             }
 
-            Debug.Log($"DualGridSystem: Initializing TileMapping at {Time.frameCount}");
+            Debug.Log($"DualGridSystem ({name}): Initializing TileMapping at {Time.frameCount}");
             tileMapping.Initialize();
-            Debug.Log($"DualGridSystem: TileMapping initialized, checking dictionary...");
 
             inputActions = new TileEditorInputs();
             AlignGrid();
@@ -60,12 +60,7 @@ namespace DigDigDiner
 
         private void OnEnable()
         {
-            if (inputActions == null)
-            {
-                Debug.LogWarning("DualGridSystem: inputActions is null in OnEnable!");
-                return;
-            }
-
+            if (inputActions == null) return;
             inputActions.Enable();
             inputActions.GameplayMap.ToggleDebug.performed += ToggleDebugOverlay;
             inputActions.GameplayMap.TileEdit.performed += OnTileEdit;
@@ -73,38 +68,27 @@ namespace DigDigDiner
 
         private void OnDisable()
         {
-            if (inputActions == null)
-            {
-                Debug.LogWarning("DualGridSystem: inputActions is null in OnDisable!");
-                return;
-            }
-
+            if (inputActions == null) return;
             inputActions.GameplayMap.ToggleDebug.performed -= ToggleDebugOverlay;
             inputActions.GameplayMap.TileEdit.performed -= OnTileEdit;
             inputActions.Disable();
         }
 
-        private void Start()
+        private void AlignGrid()
         {
+            if (colorTilemap != null && colorTilemap.layoutGrid != null)
+            {
+                Grid grid = colorTilemap.layoutGrid;
+                Vector3 currentPos = grid.transform.position;
+                grid.transform.position = new Vector3(visualOffset.x, visualOffset.y, currentPos.z);
+            }
         }
-
-private void AlignGrid()
-    {
-        if (colorTilemap != null && colorTilemap.layoutGrid != null)
-        {
-            Grid grid = colorTilemap.layoutGrid;
-            Vector3 currentPos = grid.transform.position;
-            grid.transform.position = new Vector3(visualOffset.x, visualOffset.y, currentPos.z);
-            
-            Debug.Log($"DualGridSystem: Aligned Grid to {grid.transform.position} using offset {visualOffset}");
-        }
-    }
 
         public void CompleteInitialization()
         {
             IsInitialized = true;
             RefreshAllVisualTiles();
-            Debug.Log("DualGridSystem: Initialization Finalized.");
+            Debug.Log($"DualGridSystem ({name}): Initialization Finalized.");
         }
 
         private void OnTileEdit(InputAction.CallbackContext context)
@@ -114,17 +98,7 @@ private void AlignGrid()
         
         private void HandleRuntimeTileEdit()
         {
-            if (inputActions == null)
-            {
-                Debug.LogWarning("DualGridSystem: inputActions is null!");
-                return;
-            }
-
-            if (mainCamera == null)
-            {
-                Debug.LogWarning("DualGridSystem: mainCamera is null!");
-                return;
-            }
+            if (inputActions == null || mainCamera == null) return;
 
             Vector2 mousePos = inputActions.GameplayMap.MousePosition.ReadValue<Vector2>();
             Vector3 worldPos = mainCamera.ScreenToWorldPoint(new Vector3(mousePos.x, mousePos.y, 0));
@@ -136,7 +110,6 @@ private void AlignGrid()
                 gridPos.y >= 0 && gridPos.y < gridHeight)
             {
                 CycleTileAt(gridPos.x, gridPos.y);
-                Debug.Log($"Cycled tile at ({gridPos.x}, {gridPos.y})");
             }
         }
         
@@ -144,13 +117,11 @@ private void AlignGrid()
         {
             showDebugOverlay = !showDebugOverlay;
             UpdateDebugOverlay();
-            Debug.Log($"Debug overlay: {(showDebugOverlay ? "ON" : "OFF")}");
         }
         
         private void UpdateDebugOverlay()
         {
             if (debugTilemap == null) return;
-            
             debugTilemap.ClearAllTiles();
             
             if (!showDebugOverlay) return;
@@ -188,7 +159,6 @@ private void AlignGrid()
             }
         }
         
-        
         public Tile GetTileAt(int x, int y)
         {
             if (x < 0 || x >= gridWidth || y < 0 || y >= gridHeight)
@@ -207,10 +177,6 @@ private void AlignGrid()
             }
         }
 
-        /// <summary>
-        /// Sets a tile without triggering visual updates.
-        /// Use this for batch operations like map generation.
-        /// </summary>
         public void SetTileAtSilent(int x, int y, Tile tile)
         {
             if (x >= 0 && x < gridWidth && y >= 0 && y < gridHeight)
@@ -233,47 +199,36 @@ private void AlignGrid()
             };
 
             SetTileAt(x, y, new Tile(newType));
-            Debug.Log($"Tile ({x},{y}): {tile.terrainType} -> {newType}");
         }
         
         private void UpdateVisualTile(int visualX, int visualY)
         {
-            if (tileMapping == null || artistColorTiles == null || artistColorTiles.Length == 0)
-                return;
+            if (tileMapping == null) return;
 
-            // Get the four corners (Y increases upward in Unity, so visualY+1 is above visualY)
+            // Get the four corners
             var tl = GetTileAt(visualX, visualY + 1);
             var tr = GetTileAt(visualX + 1, visualY + 1);
             var bl = GetTileAt(visualX, visualY);
             var br = GetTileAt(visualX + 1, visualY);
             
-            // Get artist tile position (returns null for all-empty pattern)
-            var artistPos = tileMapping.GetArtistPosition(
-                tl.terrainType, tr.terrainType, bl.terrainType, br.terrainType
+            // --- NEW LOGIC START ---
+            // Ask TileMapping for the correct TileBase asset directly.
+            // This handles the logic for 3-state vs 2-state AND the "Allow Zero Pattern" check internally.
+            
+            // Note: We use the int-based stateIndex from our new Tile class
+            // This works for both TerrainType (Mining) and ParallaxState (BG)
+            TileBase colorTile = tileMapping.GetTile(
+                tl.stateIndex, tr.stateIndex, bl.stateIndex, br.stateIndex
             );
-            
-            TileBase colorTile = null;
-            
-            // Handle all-empty pattern (null) vs mapped patterns
-            if (!artistPos.HasValue)
-            {
-                colorTile = emptyTile;
-            }
-            else
-            {
-                int tileIndex = (SharedConstants.TILEMAP_ROWS - 1 - artistPos.Value.y) * SharedConstants.TILEMAP_COLUMNS + artistPos.Value.x;
 
-                if (tileIndex >= 0 && tileIndex < artistColorTiles.Length)
-                {
-                    colorTile = artistColorTiles[tileIndex];
-                }
-            }
-
-            // Set tiles in tilemaps (null clears the tile)
+            // Set the tile (null clears it)
             Vector3Int tilePos = new Vector3Int(visualX, visualY, 0);
 
             if (colorTilemap != null)
-                colorTilemap.SetTile(tilePos, colorTile); // null or emptyTile clears it
+                colorTilemap.SetTile(tilePos, colorTile);
+            
+            // If you add a separate Normal Map tilemap later, you can ask for the normal tile here too.
+            // --- NEW LOGIC END ---
         }
         
         private void UpdateAffectedVisualTiles(int baseX, int baseY)
@@ -282,7 +237,6 @@ private void AlignGrid()
             {
                 for (int vy = baseY - 1; vy <= baseY; vy++)
                 {
-                    // Only update visual tiles that won't sample out-of-bounds
                     if (vx >= 0 && vx < gridWidth - 1 && vy >= 0 && vy < gridHeight - 1)
                     {
                         UpdateVisualTile(vx, vy);
@@ -295,8 +249,6 @@ private void AlignGrid()
         {
             if (colorTilemap != null) colorTilemap.ClearAllTiles();
 
-            // Only draw visual tiles up to gridWidth-1 and gridHeight-1
-            // to avoid sampling out-of-bounds at top and right edges
             for (int y = 0; y < gridHeight - 1; y++)
             {
                 for (int x = 0; x < gridWidth - 1; x++)
@@ -304,79 +256,24 @@ private void AlignGrid()
                     UpdateVisualTile(x, y);
                 }
             }
-
-            Debug.Log($"Refreshed {(gridWidth-1)}x{(gridHeight-1)} visual tiles");
+            
+            Debug.Log($"Refreshed {(gridWidth-1)}x{(gridHeight-1)} visual tiles on {name}");
         }
 
         public Vector2Int WorldToBaseGrid(Vector3 worldPos)
         {
-            Vector3Int visualCell = colorTilemap.WorldToCell(worldPos);
+            if (colorTilemap == null) return Vector2Int.zero;
 
+            Vector3Int visualCell = colorTilemap.WorldToCell(worldPos);
             Vector3 cellWorldPos = colorTilemap.CellToWorld(visualCell);
+            
             float localX = (worldPos.x - cellWorldPos.x) / colorTilemap.cellSize.x;
             float localY = (worldPos.y - cellWorldPos.y) / colorTilemap.cellSize.y;
 
-            int baseX, baseY;
-
-            if (localX < 0.5f && localY < 0.5f)
-            {
-                baseX = visualCell.x;
-                baseY = visualCell.y;
-            }
-            else if (localX >= 0.5f && localY < 0.5f)
-            {
-                baseX = visualCell.x + 1;
-                baseY = visualCell.y;
-            }
-            else if (localX < 0.5f && localY >= 0.5f)
-            {
-                baseX = visualCell.x;
-                baseY = visualCell.y + 1;
-            }
-            else
-            {
-                baseX = visualCell.x + 1;
-                baseY = visualCell.y + 1;
-            }
+            int baseX = (localX >= 0.5f) ? visualCell.x + 1 : visualCell.x;
+            int baseY = (localY >= 0.5f) ? visualCell.y + 1 : visualCell.y;
 
             return new Vector2Int(baseX, baseY);
-        }
-        
-        [ContextMenu("Debug Bottom Row")]
-        public void DebugBottomRow()
-        {
-            Debug.Log("=== BOTTOM ROW DEBUG ===");
-            
-            // Check base grid bottom row (y=0 in array, bottom of map)
-            for (int x = 0; x < gridWidth; x++)
-            {
-                var tile = GetTileAt(x, 0);
-                Debug.Log($"Base[{x},0] = {tile.terrainType}");
-            }
-            
-            // Check what visual tiles see for bottom row
-            for (int vx = 0; vx < gridWidth; vx++)
-            {
-                var tl = GetTileAt(vx, 1);
-                var tr = GetTileAt(vx + 1, 1);
-                var bl = GetTileAt(vx, 0);
-                var br = GetTileAt(vx + 1, 0);
-
-                var artistPos = tileMapping.GetArtistPosition(
-                    tl.terrainType, tr.terrainType, bl.terrainType, br.terrainType
-                );
-                
-                if (!artistPos.HasValue)
-                {
-                    Debug.Log($"Visual[{vx},0]: TL={tl.terrainType} TR={tr.terrainType} BL={bl.terrainType} BR={br.terrainType} -> Artist(Empty)");
-                    continue;
-                }
-                else
-                {
-                    int tileIndex = artistPos.Value.y * SharedConstants.TILEMAP_COLUMNS + artistPos.Value.x;
-                    Debug.Log($"Visual[{vx},0]: TL={tl.terrainType} TR={tr.terrainType} BL={bl.terrainType} BR={br.terrainType} -> Artist({artistPos.Value.x},{artistPos.Value.y}) -> Index {tileIndex}");
-                }                
-            }
         }
     }
 }

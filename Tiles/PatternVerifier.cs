@@ -155,7 +155,7 @@ namespace DigDigDiner
             var patterns = new List<Pattern>();
             int index = 0;
             
-            int maxState = tileMapping.StateCount;
+            int maxState = tileMapping != null ? tileMapping.StateCount : SharedConstants.TERRAIN_TYPE_COUNT;
 
             for (int tl = 0; tl < maxState; tl++)
             {

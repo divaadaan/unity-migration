@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.Tilemaps;
 using System.Collections.Generic;
 
 namespace DigDigDiner
@@ -12,7 +13,7 @@ namespace DigDigDiner
             public int index;
             public int col;
             public int row;
-            public int[] pattern; // [tl, tr, bl, br]
+            public int[] pattern;
         }
         
         [System.Serializable]
@@ -23,16 +24,20 @@ namespace DigDigDiner
         
         [Header("Configuration")]
         [SerializeField] private TextAsset mappingJson;
+        
+        [Header("Visual Assets")]
+        [Tooltip("Assign the Tile assets here. Array index must match JSON index.")]
+        [SerializeField] private TileBase[] tileAssets; 
 
-        [Tooltip("2 for Backgrounds (Default/Active), 3 for Mining (Empty/Diggable/Undiggable)")]
+        [Header("Settings")]
+        [Tooltip("2 for Backgrounds, 3 for Mining")]
         [SerializeField] private int stateCount = 3; 
-
-        [Tooltip("If FALSE, the 0,0,0,0 pattern will always return NULL (transparent tile).")]
         [SerializeField] private bool allowZeroPattern = false;
 
         public int StateCount => stateCount;
 
         private Dictionary<string, Vector2Int> patternToPosition;
+        private Dictionary<string, int> patternToIndex; 
         
         [System.NonSerialized]
         private bool isInitialized = false;
@@ -40,13 +45,7 @@ namespace DigDigDiner
         public void Initialize()
         {
             if (isInitialized) return;
-            
-            if (mappingJson == null)
-            {
-                Debug.LogError($"TileMapping ({name}): No JSON file assigned!");
-                return;
-            }
-            
+            if (mappingJson == null) { Debug.LogError($"TileMapping ({name}): No JSON!"); return; }
             LoadMappingFromJson();
             isInitialized = true;
         }
@@ -54,65 +53,66 @@ namespace DigDigDiner
         private void LoadMappingFromJson()
         {
             patternToPosition = new Dictionary<string, Vector2Int>();
+            patternToIndex = new Dictionary<string, int>(); // New Dictionary
             
             try
             {
                 var data = JsonUtility.FromJson<PatternList>(mappingJson.text);
-                
-                if (data == null || data.patterns == null)
-                {
-                    Debug.LogError($"TileMapping ({name}): Failed to parse pattern list!");
-                    return;
-                }
+                if (data == null || data.patterns == null) return;
                 
                 foreach (var entry in data.patterns)
                 {
-                    if (entry.pattern == null || entry.pattern.Length != 4)
-                        continue;
+                    if (entry.pattern == null || entry.pattern.Length != 4) continue;
                     
                     string key = $"{entry.pattern[0]},{entry.pattern[1]},{entry.pattern[2]},{entry.pattern[3]}";
+                    
                     patternToPosition[key] = new Vector2Int(entry.col, entry.row);
+                    patternToIndex[key] = entry.index;
                 }
-                
-                Debug.Log($"TileMapping ({name}): Loaded {patternToPosition.Count} patterns. Mode: {stateCount}-State. Zero Pattern Allowed: {allowZeroPattern}");
             }
-            catch (System.Exception e)
-            {
-                Debug.LogError($"TileMapping ({name}): JSON Parse Error: {e.Message}");
-            }
+            catch (System.Exception e) { Debug.LogError(e.Message); }
         }
         
-        public Vector2Int? GetArtistPosition(int tl, int tr, int bl, int br)
+        /// <summary>
+        /// Returns the actual TileBase asset for the given pattern.
+        /// </summary>
+        public TileBase GetTile(int tl, int tr, int bl, int br)
         {
             if (!isInitialized) Initialize();
 
-            // 1. Check for Zero Pattern Override
-            // If all corners are 0, and we disallow zero patterns, return null immediately.
             if (!allowZeroPattern && tl == 0 && tr == 0 && bl == 0 && br == 0)
-            {
                 return null;
-            }
 
-            // Otherwise Standard Lookup
             string key = $"{tl},{tr},{bl},{br}";
-            
-            if (patternToPosition != null && patternToPosition.TryGetValue(key, out Vector2Int pos))
+
+            if (patternToIndex != null && patternToIndex.TryGetValue(key, out int index))
             {
-                return pos;
+                if (tileAssets != null && index >= 0 && index < tileAssets.Length)
+                {
+                    return tileAssets[index];
+                }
             }
             
             return null;
         }
-        
-        public Vector2Int? GetArtistPosition(TerrainType tl, TerrainType tr, TerrainType bl, TerrainType br)
+
+        public Vector2Int? GetArtistPosition(int tl, int tr, int bl, int br)
         {
-            return GetArtistPosition((int)tl, (int)tr, (int)bl, (int)br);
+            if (!isInitialized) Initialize();
+            string key = $"{tl},{tr},{bl},{br}";
+            if (patternToPosition != null && patternToPosition.TryGetValue(key, out Vector2Int pos)) return pos;
+            return null;
         }
 
+        public TileBase GetTile(TerrainType tl, TerrainType tr, TerrainType bl, TerrainType br)
+        {
+            return GetTile((int)tl, (int)tr, (int)bl, (int)br);
+        }
+        
         public (int col, int row) GetArtistPositionTuple(int tl, int tr, int bl, int br)
         {
-            var pos = GetArtistPosition(tl, tr, bl, br);
-            return pos.HasValue ? (pos.Value.x, pos.Value.y) : (-1, -1);
+             var pos = GetArtistPosition(tl, tr, bl, br);
+             return pos.HasValue ? (pos.Value.x, pos.Value.y) : (-1, -1);
         }
     }
 }
