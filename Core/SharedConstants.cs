@@ -4,24 +4,19 @@ namespace DigDigDiner
 {
     public static class SharedConstants
     {
-        // Grid dimensions
         public const int GRID_WIDTH = 10;
         public const int GRID_HEIGHT = 10;
         
-        // Tilemap layout
         public const int TILEMAP_COLUMNS = 8;
         public const int TILEMAP_ROWS = 10;
         public const int TOTAL_PATTERNS = 80;
         
-        // Tile dimensions
         public const int SOURCE_TILE_SIZE = 200;  
         public const float RENDER_TILE_SIZE = 1.0f; 
         
-        // Visual offset (draw grid offset from base grid)
         public static readonly Vector2 VISUAL_OFFSET = new Vector2(-0.5f, -0.5f);
         
-        public const int TERRAIN_TYPE_COUNT = 3; // Empty, Diggable, Undiggable
-        
+        public const int TERRAIN_TYPE_COUNT = 3; 
         public const int TOTAL_POSSIBLE_PATTERNS = 81; 
         
         public static readonly Color DEBUG_EMPTY_COLOR = new Color(1f, 1f, 1f, 0.3f);
@@ -41,8 +36,6 @@ namespace DigDigDiner
         public const float PLAYER_SHADOW_ALPHA = 0.4f;
         public const float PLAYER_SHADOW_OFFSET_Y = -0.1f; 
         public const float PLAYER_DIRECTION_INDICATOR_OFFSET = 0.18f;  
-
-        // Player Dig Preview
         public const float DIG_PREVIEW_ALPHA = 0.5f;
         public static readonly Color DIG_PREVIEW_COLOR = new Color(1f, 1f, 0f, 0.5f); // Yellow highlight
 

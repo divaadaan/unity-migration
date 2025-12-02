@@ -18,7 +18,6 @@ namespace DigDigDiner
         private Texture2D comparisonTexture;
         private List<string> errors = new List<string>();
         
-        // UI constants
         private const int DIVIDER_GAP = 20;
         private const int MIN_WINDOW_WIDTH = 400;
         private const int MIN_WINDOW_HEIGHT = 500;
@@ -27,7 +26,6 @@ namespace DigDigDiner
         private const int PREVIEW_HEIGHT = 200;
         private const int PREVIEW_WIDTH = 380;
         
-        // Drawing constants
         private const int QUADRANT_DIVISIONS = 2;
         private const int LINE_THICKNESS_HEAVY = 2;
         private const int LINE_THICKNESS_LIGHT = 1;
@@ -36,11 +34,12 @@ namespace DigDigDiner
         private const int LABEL_OFFSET_X = 5;
         private const int LABEL_OFFSET_Y = 20;
         
-        // Colors
         private static readonly Color BACKGROUND_COLOR = new Color(0.2f, 0.2f, 0.2f, 1f);
-        private static readonly Color SYSTEMATIC_EMPTY_COLOR = new Color(0.95f, 0.95f, 0.95f, 1f);
-        private static readonly Color SYSTEMATIC_DIGGABLE_COLOR = new Color(0.4f, 0.6f, 1f, 1f);
-        private static readonly Color SYSTEMATIC_UNDIGGABLE_COLOR = new Color(0.8f, 0.2f, 0.2f, 1f);
+        private static readonly Color SYSTEMATIC_STATE_0 = new Color(0.95f, 0.95f, 0.95f, 1f); 
+        private static readonly Color SYSTEMATIC_STATE_1 = new Color(0.4f, 0.6f, 1f, 1f);
+        private static readonly Color SYSTEMATIC_STATE_2 = new Color(0.8f, 0.2f, 0.2f, 1f);
+        private static readonly Color SYSTEMATIC_STATE_OTHER = Color.gray;
+
         private static readonly Color BORDER_COLOR_DARK = Color.black;
         private static readonly Color BORDER_COLOR_LIGHT = new Color(0.3f, 0.3f, 0.3f, 1f);
         private static readonly Color DIVIDER_COLOR = new Color(0.5f, 0.5f, 0.5f, 1f);
@@ -122,26 +121,25 @@ namespace DigDigDiner
                 return;
             }
             
-            Debug.Log($"Starting comparison generation...");
-            Debug.Log($"Artist tilemap: {artistTilemap.width}x{artistTilemap.height}px");
-            Debug.Log($"Expected: {columns * tileSize}x{rows * tileSize}px");
-            
             tileMapping.Initialize();
             
+            Debug.Log($"Starting comparison generation...");
+            Debug.Log($"Artist tilemap: {artistTilemap.width}x{artistTilemap.height}px");
+            
+            var patterns = GenerateAllPatterns();
+            Debug.Log($"Generated {patterns.Count} patterns to verify (State Count: {tileMapping.StateCount})");
+
             int width = columns * tileSize * QUADRANT_DIVISIONS + DIVIDER_GAP;
-            int height = rows * tileSize;
+            int requiredRows = Mathf.CeilToInt((float)patterns.Count / columns);
+            int height = Mathf.Max(rows, requiredRows) * tileSize;
             
             comparisonTexture = new Texture2D(width, height, TextureFormat.RGBA32, false);
             comparisonTexture.filterMode = FilterMode.Point;
-            
+
             var pixels = new Color[width * height];
             for (int i = 0; i < pixels.Length; i++)
                 pixels[i] = BACKGROUND_COLOR;
             comparisonTexture.SetPixels(pixels);
-            
-            var patterns = GenerateAllPatterns();
-            
-            Debug.Log($"Generated {patterns.Count} patterns to verify");
             
             DrawSystematicTiles(patterns);
             DrawArtistTiles(patterns);            
@@ -157,25 +155,23 @@ namespace DigDigDiner
             var patterns = new List<Pattern>();
             int index = 0;
             
-            for (int tl = 0; tl < SharedConstants.TERRAIN_TYPE_COUNT; tl++)
+            int maxState = tileMapping.StateCount;
+
+            for (int tl = 0; tl < maxState; tl++)
             {
-                for (int tr = 0; tr < SharedConstants.TERRAIN_TYPE_COUNT; tr++)
+                for (int tr = 0; tr < maxState; tr++)
                 {
-                    for (int bl = 0; bl < SharedConstants.TERRAIN_TYPE_COUNT; bl++)
+                    for (int bl = 0; bl < maxState; bl++)
                     {
-                        for (int br = 0; br < SharedConstants.TERRAIN_TYPE_COUNT; br++)
+                        for (int br = 0; br < maxState; br++)
                         {
-                            // Skip all-empty pattern
-                            if (tl == 0 && tr == 0 && bl == 0 && br == 0)
-                                continue;
-                            
                             patterns.Add(new Pattern
                             {
                                 index = index++,
-                                tl = (TerrainType)tl,
-                                tr = (TerrainType)tr,
-                                bl = (TerrainType)bl,
-                                br = (TerrainType)br
+                                tl = tl,
+                                tr = tr,
+                                bl = bl,
+                                br = br
                             });
                         }
                     }
@@ -189,7 +185,7 @@ namespace DigDigDiner
         {
             Debug.Log("Drawing systematic tiles...");
     
-            for (int i = 0; i < patterns.Count && i < SharedConstants.TOTAL_PATTERNS; i++)
+            for (int i = 0; i < patterns.Count; i++)
             {
                 var pattern = patterns[i];
                 int col = i % columns;
@@ -206,29 +202,27 @@ namespace DigDigDiner
         {
             int half = tileSize / QUADRANT_DIVISIONS;
             
-            // Use systematic colors (different from debug colors for visual distinction)
-            var colors = new Dictionary<TerrainType, Color>
-            {
-                { TerrainType.Empty, SYSTEMATIC_EMPTY_COLOR },
-                { TerrainType.Diggable, SYSTEMATIC_DIGGABLE_COLOR },
-                { TerrainType.Undiggable, SYSTEMATIC_UNDIGGABLE_COLOR }
-            };
+            DrawQuadrant(x, y + half, half, GetColorForState(pattern.tl));
+            DrawQuadrant(x + half, y + half, half, GetColorForState(pattern.tr));
+            DrawQuadrant(x, y, half, GetColorForState(pattern.bl));
+            DrawQuadrant(x + half, y, half, GetColorForState(pattern.br));
             
-            // Draw quadrants (top-left, top-right, bottom-left, bottom-right)
-            DrawQuadrant(x, y + half, half, colors[pattern.tl]);
-            DrawQuadrant(x + half, y + half, half, colors[pattern.tr]);
-            DrawQuadrant(x, y, half, colors[pattern.bl]);
-            DrawQuadrant(x + half, y, half, colors[pattern.br]);
-            
-            // Draw quadrant dividers
             DrawLine(x + half, y, x + half, y + tileSize, BORDER_COLOR_DARK, LINE_THICKNESS_HEAVY);
             DrawLine(x, y + half, x + tileSize, y + half, BORDER_COLOR_DARK, LINE_THICKNESS_HEAVY);
             
-            // Draw tile border
             DrawBorder(x, y, tileSize, BORDER_COLOR_DARK, LINE_THICKNESS_HEAVY);
-            
-            // Add index label
             DrawLabel(x + LABEL_OFFSET_X, y + tileSize - LABEL_OFFSET_Y, pattern.index.ToString());
+        }
+
+        private Color GetColorForState(int state)
+        {
+            switch (state)
+            {
+                case 0: return SYSTEMATIC_STATE_0;
+                case 1: return SYSTEMATIC_STATE_1;
+                case 2: return SYSTEMATIC_STATE_2;
+                default: return SYSTEMATIC_STATE_OTHER;
+            }
         }
         
         private void DrawArtistTiles(List<Pattern> patterns)
@@ -237,13 +231,18 @@ namespace DigDigDiner
     
             int xOffset = columns * tileSize + DIVIDER_GAP;
     
-            for (int i = 0; i < patterns.Count && i < SharedConstants.TOTAL_PATTERNS; i++)
+            for (int i = 0; i < patterns.Count; i++)
             {
                 var pattern = patterns[i];
         
                 var (artistCol, artistRow) = tileMapping.GetArtistPositionTuple(
                     pattern.tl, pattern.tr, pattern.bl, pattern.br
                 );
+                
+                if (artistCol < 0 || artistRow < 0)
+                {
+                     continue;
+                }
         
                 int displayCol = i % columns;
                 int displayRow = i / columns;
@@ -298,7 +297,7 @@ namespace DigDigDiner
         {
             int halfThickness = thickness / 2;
             
-            if (x1 == x2) // Vertical line
+            if (x1 == x2) 
             {
                 for (int t = 0; t < thickness; t++)
                 {
@@ -311,7 +310,7 @@ namespace DigDigDiner
                     }
                 }
             }
-            else if (y1 == y2) // Horizontal line
+            else if (y1 == y2)
             {
                 for (int t = 0; t < thickness; t++)
                 {
@@ -353,7 +352,6 @@ namespace DigDigDiner
         
         private void DrawLabel(int x, int y, string text)
         {
-            // Draw simple label background
             for (int dx = 0; dx < LABEL_WIDTH; dx++)
             {
                 for (int dy = 0; dy < LABEL_HEIGHT; dy++)
@@ -381,11 +379,11 @@ namespace DigDigDiner
                 AssetDatabase.Refresh();
             }
         }
-        
+
         private class Pattern
         {
             public int index;
-            public TerrainType tl, tr, bl, br;
+            public int tl, tr, bl, br;
         }
     }
 #endif

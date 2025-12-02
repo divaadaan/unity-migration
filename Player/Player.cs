@@ -100,7 +100,6 @@ namespace DigDigDiner
             {
                 Debug.LogError($"Player: Invalid spawn position {gridPosition}! Tile type: {(tile != null ? tile.terrainType.ToString() : "NULL")}");
 
-                // Don't default to (0,0) - that's the corner! Find ANY empty tile
                 for (int y = gridSystem.Height - 1; y >= 0; y--)
                 {
                     for (int x = 0; x < gridSystem.Width; x++)
@@ -118,7 +117,6 @@ namespace DigDigDiner
                 FoundSpawn:;
             }
 
-            // Update world position
             UpdateWorldPosition();
 
             Debug.Log($"Player spawned at grid position: {gridPosition}, world position: {transform.position}");
