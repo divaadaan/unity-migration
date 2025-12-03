@@ -3,7 +3,6 @@ using System.Collections.Generic;
 
 namespace DigDigDiner
 {
-    // 1. Cellular Automata (Organic Blobs)
     public class CellularAutomataGenerator : IBackgroundGenerator
     {
         public string Name => "Cellular Automata";
@@ -66,7 +65,6 @@ namespace DigDigDiner
         }
     }
 
-    // 2. Perlin Noise (Clouds / Large Regions)
     public class PerlinNoiseGenerator : IBackgroundGenerator
     {
         public string Name => "Perlin Noise";
@@ -84,19 +82,33 @@ namespace DigDigDiner
             var set = new HashSet<Vector2Int>();
             Vector2 offset = new Vector2(seed % 100, seed % 100);
 
+            //debug trackers
+            float minVal = 1.0f;
+            float maxVal = 0.0f;
+            int activeCount = 0;
+
             for (int x = 0; x < width; x++)
             {
                 for (int y = 0; y < height; y++)
                 {
                     float val = Mathf.PerlinNoise((x * scale) + offset.x, (y * scale) + offset.y);
-                    if (val > threshold) set.Add(new Vector2Int(x, y));
+                    // Track range
+                    if (val < minVal) minVal = val;
+                    if (val > maxVal) maxVal = val;
+
+                    if (val > threshold)
+                    {
+                        set.Add(new Vector2Int(x, y));
+                        activeCount++;
+                    }
                 }
             }
+            
+            Debug.Log($"[Perlin Debug] Range: {minVal:F3} to {maxVal:F3} | Threshold: {threshold} | Active Tiles: {activeCount}/{width*height}");
             return set;
         }
     }
 
-    // 3. Random Walk (Snake/Veins)
     public class RandomWalkGenerator : IBackgroundGenerator
     {
         public string Name => "Random Walk";
@@ -135,7 +147,6 @@ namespace DigDigDiner
         }
     }
 
-    // 4. Custom Cluster Spawner (Scattered Groups)
     public class ClusterGenerator : IBackgroundGenerator
     {
         public string Name => "Cluster Spawner";

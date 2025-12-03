@@ -169,8 +169,6 @@ namespace DigDigDiner
                     {
                         gridSystem.SetTileAtSilent(x, y, new Tile(TerrainType.Empty));
                         emptyTilesCreated++;
-                        if (showDebugLogs)
-                            Debug.Log($"MapGenerator: Created Empty tile at ({x}, {y})");
                     }
                 }
             }
