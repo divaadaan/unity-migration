@@ -13,25 +13,25 @@ namespace DigDigDiner
         [Header("Configuration")]
         [SerializeField] private AlgoType algorithm = AlgoType.CellularAutomata;
         [SerializeField] private int seed = 12345;
-        [SerializeField] private bool randomizeSeedOnStart = true;
 
         [Header("Algorithm Settings")]
-        [Tooltip("Fill % for CA, Threshold for Perlin")]
         [Range(0f, 1f)] public float densityParam = 0.45f;
-        [Tooltip("Steps for Walk, Radius for Clusters")]
         public int sizeParam = 5;
-        [Tooltip("Noise Scale for Perlin (Lower = Zoomed In, Higher = Noisier)")]
-            public float noiseScale = 0.1f;
-        private void Start()
-        {
-            if (randomizeSeedOnStart) seed = Random.Range(0, 100000);
-            Generate();
-        }
+        public float noiseScale = 0.1f;
 
-        [ContextMenu("Regenerate")]
-        public void Generate()
+        /// <summary>
+        /// Generates the background layer using the configured algorithm.
+        /// </summary>
+        /// <param name="externalSeed">Optional seed.</param>
+        public void Generate(int? externalSeed = null)
         {
             if (gridSystem == null) return;
+
+            if (externalSeed.HasValue)
+            {
+                //this makes sure the BG and DistantBG layers don't have the same seed by accident
+                seed = externalSeed.Value + (int)algorithm + (name.GetHashCode() % 100);
+            }
 
             IBackgroundGenerator generator = algorithm switch
             {
@@ -42,18 +42,18 @@ namespace DigDigDiner
                 _ => new ClusterGenerator()
             };
 
-            Debug.Log($"BG Generator: Running {generator.Name}...");
+            Debug.Log($"BG Generator ({name}): Running {generator.Name} with seed {seed}...");
 
             HashSet<Vector2Int> activeTiles = generator.Generate(gridSystem.Width, gridSystem.Height, seed);
           
+            // Batch update using Silent set
             for (int x = 0; x < gridSystem.Width; x++)
             {
                 for (int y = 0; y < gridSystem.Height; y++)
                 {
                     bool isActive = activeTiles.Contains(new Vector2Int(x, y));
-                    TerrainType type = isActive ? TerrainType.Diggable : TerrainType.Empty;
-                    
-                    gridSystem.SetTileAtSilent(x, y, new Tile(type));
+                    int stateIndex = isActive ? 1 : 0;
+                    gridSystem.SetTileAtSilent(x, y, new Tile(stateIndex));
                 }
             }
 

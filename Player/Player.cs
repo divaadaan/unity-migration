@@ -197,7 +197,11 @@ namespace DigDigDiner
         {
             // Convert grid position to world position
             // Grid positions are at integer coordinates, center the player on them
-            Vector3 worldPos = new Vector3(gridPosition.x, gridPosition.y, 0);
+            Vector3 worldPos = new Vector3(
+                gridPosition.x, 
+                gridPosition.y, 
+                SharedConstants.PLAYER_Z_POSITION
+            );
             transform.position = worldPos;
         }
 

@@ -51,18 +51,23 @@ namespace DigDigDiner
             }
         }
 
-        private void Start()
-        {
-            GenerateMap();
-        }
-
         /// <summary>
         /// Main map generation entry point.
         /// </summary>
-        public void GenerateMap()
+        public void GenerateMap(int? externalSeed = null)
         {
             if (showDebugLogs)
                 Debug.Log($"MapGenerator: Starting {generationMode} generation...");
+            
+            // Initialize Random with explicit seed if provided
+            if (externalSeed.HasValue)
+            {
+                random = new System.Random(externalSeed.Value);
+            }
+            else if (random == null)
+            {
+                random = new System.Random();
+            }
 
             switch (generationMode)
             {
@@ -235,30 +240,40 @@ namespace DigDigDiner
         /// </summary>
         private void InitializeDefaultUndiggableConfigs()
         {
-            // Large obstacles/pillars
             undiggablePocketConfigs.Add(new BlobSpawner.BlobSpawnConfig
             {
-                configName = "Stone Pillars",
+                configName = "Bedrock Pillars",
                 terrainType = TerrainType.Undiggable,
-                minCount = 2,
-                maxCount = 4,
-                minSpacing = 5,
-                spawnProbability = 0.7f,
-                largeBlobWeight = 0.9f,
-                snakeBlobWeight = 0.1f
+                minCount = 4,
+                maxCount = 8,
+                minSpacing = 4,
+                spawnProbability = 1.0f,
+                largeBlobWeight = 0.85f, // Mostly solid chunks
+                snakeBlobWeight = 0.15f
             });
 
-            // Narrow undiggable veins
             undiggablePocketConfigs.Add(new BlobSpawner.BlobSpawnConfig
             {
-                configName = "Rock Veins",
+                configName = "Hard Rock Veins",
                 terrainType = TerrainType.Undiggable,
-                minCount = 1,
-                maxCount = 3,
-                minSpacing = 4,
-                spawnProbability = 0.5f,
+                minCount = 2,
+                maxCount = 5,
+                minSpacing = 5,
+                spawnProbability = 0.85f,
                 largeBlobWeight = 0.1f,
-                snakeBlobWeight = 0.9f
+                snakeBlobWeight = 0.9f // Mostly snake-like walls
+            });
+
+            undiggablePocketConfigs.Add(new BlobSpawner.BlobSpawnConfig
+            {
+                configName = "Rubble Patches",
+                terrainType = TerrainType.Undiggable,
+                minCount = 3,
+                maxCount = 6,
+                minSpacing = 3,
+                spawnProbability = 0.6f,
+                largeBlobWeight = 0.5f,
+                snakeBlobWeight = 0.5f
             });
         }
 

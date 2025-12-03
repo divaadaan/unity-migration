@@ -30,14 +30,16 @@ namespace DigDigDiner
         // Player 
         public const float PLAYER_MOVE_SPEED = 5f;
         public const float PLAYER_MOVE_COOLDOWN = 0.15f; 
-        public const float PLAYER_BODY_RADIUS = 0.05f;  
+        public const float PLAYER_BODY_RADIUS = 0.35f;  
+        public const float PLAYER_Z_POSITION = -1.0f;   
+        
         public const float PLAYER_BOB_SPEED = 3f;
         public const float PLAYER_BOB_AMOUNT = 0.05f;   
         public const float PLAYER_SHADOW_ALPHA = 0.4f;
         public const float PLAYER_SHADOW_OFFSET_Y = -0.1f; 
         public const float PLAYER_DIRECTION_INDICATOR_OFFSET = 0.18f;  
         public const float DIG_PREVIEW_ALPHA = 0.5f;
-        public static readonly Color DIG_PREVIEW_COLOR = new Color(1f, 1f, 0f, 0.5f); // Yellow highlight
+        public static readonly Color DIG_PREVIEW_COLOR = new Color(1f, 1f, 0f, 0.5f); 
 
         // Player Camera
         public const float PLAYER_CAMERA_SMOOTH_TIME = 0.15f;
