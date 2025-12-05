@@ -40,13 +40,14 @@ namespace DigDigDiner
             bodyRenderer.sprite = CreateCircleSprite(SharedConstants.PLAYER_BODY_RADIUS);
             bodyRenderer.color = playerColor;
             bodyRenderer.sortingOrder = 10; 
+            bodyRenderer.sortingLayerName = "MG";
 
             // Shadow
             shadowObject = new GameObject("Shadow");
             shadowObject.transform.SetParent(transform);
             shadowObject.transform.localPosition = new Vector3(0, SharedConstants.PLAYER_SHADOW_OFFSET_Y, 0);
             shadowRenderer = shadowObject.AddComponent<SpriteRenderer>();
-            // Pass the desired WORLD radius directly
+            bodyRenderer.sortingLayerName = "MG";
             shadowRenderer.sprite = CreateCircleSprite(SharedConstants.PLAYER_BODY_RADIUS * 0.8f);
             shadowRenderer.color = new Color(0, 0, 0, SharedConstants.PLAYER_SHADOW_ALPHA);
             shadowRenderer.sortingOrder = 8; 
@@ -58,6 +59,7 @@ namespace DigDigDiner
             directionRenderer = directionIndicatorObject.AddComponent<SpriteRenderer>();
             directionRenderer.sprite = CreateTriangleSprite();
             directionRenderer.color = directionIndicatorColor;
+            bodyRenderer.sortingLayerName = "MG";
             directionRenderer.sortingOrder = 11; 
 
             // Dig Preview
