@@ -12,9 +12,12 @@ namespace DigDigDiner
         [Header("Layer Generators (Order of Execution)")]
         [Tooltip("DistantBG")]
         [SerializeField] private BackgroundMapGenerator distantBgGenerator;
+        
+        [Tooltip("Phase 1b: Distant Decorations")]
+        [SerializeField] private DistantDecorationMapGenerator distantDecorationGenerator;
 
         [Tooltip("BG")]
-        [SerializeField] private BackgroundMapGenerator midBgGenerator;
+        [SerializeField] private BackgroundMapGenerator BGGenerator;
 
         [Tooltip("MG")]
         [SerializeField] private MapGenerator miningGenerator;
@@ -42,17 +45,28 @@ namespace DigDigDiner
             }
 
             Debug.Log($"--- World Generation Director: Starting (Seed: {globalSeed}) ---");
+            Debug.Log($"--- World Generation Director: Starting DistantBG");
 
             if (distantBgGenerator != null)
             {
                 distantBgGenerator.Generate(globalSeed);
             }
 
-            if (midBgGenerator != null)
+            Debug.Log($"--- World Generation Director: Starting DistantBG Decorations");
+
+            if (distantDecorationGenerator != null)
             {
-                midBgGenerator.Generate(globalSeed);
+                // We don't really need a seed since it's a clone, but we pass it for consistency
+                distantDecorationGenerator.Generate(globalSeed);
             }
 
+            Debug.Log($"--- World Generation Director: Starting BG");
+            if (BGGenerator != null)
+            {
+                BGGenerator.Generate(globalSeed);
+            }
+            
+            Debug.Log($"--- World Generation Director: Starting MG");
             if (miningGenerator != null)
             {
                 miningGenerator.GenerateMap(globalSeed);
@@ -61,12 +75,14 @@ namespace DigDigDiner
             {
                 Debug.LogError("Director: Critical Error - Mining Generator is missing!");
             }
-            
+
+            Debug.Log($"--- World Generation Director: Starting MG Decoration");
             if (decorationGenerator != null)
             {
                 decorationGenerator.Generate(globalSeed);
             }
             
+            Debug.Log($"--- World Generation Director: Starting FG");
             if (foregroundGenerator != null)
             {
                 foregroundGenerator.Generate(globalSeed);

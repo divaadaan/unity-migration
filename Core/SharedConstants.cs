@@ -29,7 +29,7 @@ namespace DigDigDiner
         public const float PLAYER_MOVE_SPEED = 5f;
         public const float PLAYER_MOVE_COOLDOWN = 0.15f; 
         public const float PLAYER_BODY_RADIUS = 0.35f;  
-        public const float PLAYER_Z_POSITION = -1.0f;   
+        public const float PLAYER_Z_POSITION = 0.0f;   
         
         public const float PLAYER_BOB_SPEED = 3f;
         public const float PLAYER_BOB_AMOUNT = 0.05f;   

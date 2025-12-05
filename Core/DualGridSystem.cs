@@ -31,6 +31,7 @@ namespace DigDigDiner
         public int Width => gridWidth;
         public int Height => gridHeight;
         public bool IsInitialized { get; private set; } = false;
+        public event System.Action<int,int, Tile> OnTileChanged;
         
         private void Awake()
         {
@@ -157,6 +158,7 @@ namespace DigDigDiner
             {
                 baseGrid[y, x] = tile;
                 UpdateAffectedVisualTiles(x, y);
+                OnTileChanged?.Invoke(x, y, tile);
             }
         }
 
