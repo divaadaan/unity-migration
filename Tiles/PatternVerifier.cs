@@ -15,12 +15,16 @@ namespace DigDigDiner
         private int columns = SharedConstants.TILEMAP_COLUMNS;
         private int rows = SharedConstants.TILEMAP_ROWS;
         
+        // Template Generation Settings
+        private int templateStateCount = 3;
+        private int templateColumns = 9; // 9 is nice for base-3 (3x3 groups)
+        
         private Texture2D comparisonTexture;
         private List<string> errors = new List<string>();
         
         private const int DIVIDER_GAP = 20;
-        private const int MIN_WINDOW_WIDTH = 400;
-        private const int MIN_WINDOW_HEIGHT = 500;
+        private const int MIN_WINDOW_WIDTH = 450;
+        private const int MIN_WINDOW_HEIGHT = 600;
         private const int GENERATE_BUTTON_HEIGHT = 30;
         private const int ERROR_SCROLL_HEIGHT = 150;
         private const int PREVIEW_HEIGHT = 200;
@@ -35,9 +39,9 @@ namespace DigDigDiner
         private const int LABEL_OFFSET_Y = 20;
         
         private static readonly Color BACKGROUND_COLOR = new Color(0.2f, 0.2f, 0.2f, 1f);
-        private static readonly Color SYSTEMATIC_STATE_0 = new Color(0.95f, 0.95f, 0.95f, 1f); 
-        private static readonly Color SYSTEMATIC_STATE_1 = new Color(0.4f, 0.6f, 1f, 1f);
-        private static readonly Color SYSTEMATIC_STATE_2 = new Color(0.8f, 0.2f, 0.2f, 1f);
+        private static readonly Color SYSTEMATIC_STATE_0 = new Color(0.95f, 0.95f, 0.95f, 1f); // Empty
+        private static readonly Color SYSTEMATIC_STATE_1 = new Color(0.4f, 0.6f, 1f, 1f);    // Diggable / Active
+        private static readonly Color SYSTEMATIC_STATE_2 = new Color(0.8f, 0.2f, 0.2f, 1f);    // Undiggable
         private static readonly Color SYSTEMATIC_STATE_OTHER = Color.gray;
 
         private static readonly Color BORDER_COLOR_DARK = Color.black;
@@ -56,8 +60,11 @@ namespace DigDigDiner
         private void OnGUI()
         {
             EditorGUILayout.LabelField("Tile Pattern Verifier", EditorStyles.boldLabel);
-            EditorGUILayout.Space();
             
+            // --- EXISTING COMPARISON UI ---
+            GUILayout.BeginVertical("box");
+            EditorGUILayout.LabelField("1. Verify Existing Mappings", EditorStyles.boldLabel);
+            EditorGUILayout.Space();
             tileMapping = EditorGUILayout.ObjectField("Tile Mapper", tileMapping, typeof(TileMapping), false) as TileMapping;
             artistTilemap = EditorGUILayout.ObjectField("Artist Tilemap", artistTilemap, typeof(Texture2D), false) as Texture2D;
             
@@ -66,21 +73,46 @@ namespace DigDigDiner
             columns = EditorGUILayout.IntField("Columns", columns);
             rows = EditorGUILayout.IntField("Rows", rows);
             
-            EditorGUILayout.Space();
-            
             if (GUILayout.Button("Generate Comparison", GUILayout.Height(GENERATE_BUTTON_HEIGHT)))
             {
                 GenerateComparison();
             }
+            GUILayout.EndVertical();
             
+            EditorGUILayout.Space();
+
+            // --- NEW TEMPLATE GENERATION UI ---
+            GUILayout.BeginVertical("box");
+            EditorGUILayout.LabelField("2. Generate Artist Template (Algorithmic)", EditorStyles.boldLabel);
+            EditorGUILayout.HelpBox("Generates a systematic reference image based on strict mathematical ordering. Give this to the artist.", MessageType.Info);
+            
+            templateStateCount = EditorGUILayout.IntField("State Count", templateStateCount);
+            templateColumns = EditorGUILayout.IntField("Template Columns", templateColumns);
+            
+            if (GUILayout.Button($"Generate {templateStateCount}-State Template", GUILayout.Height(GENERATE_BUTTON_HEIGHT)))
+            {
+                GenerateArtistTemplate(templateStateCount);
+            }
+            GUILayout.EndVertical();
+
+            EditorGUILayout.Space();
+            
+            // --- PREVIEW & SAVING ---
             if (comparisonTexture != null)
             {
-                if (GUILayout.Button("Save Comparison Image"))
+                if (GUILayout.Button("Save Generated Image"))
                 {
                     SaveTexture(comparisonTexture);
                 }
+
+                EditorGUILayout.Space();
+                EditorGUILayout.LabelField("Preview:", EditorStyles.boldLabel);
+                
+                var rect = GUILayoutUtility.GetRect(PREVIEW_WIDTH, PREVIEW_HEIGHT);
+                GUI.DrawTexture(rect, comparisonTexture, ScaleMode.ScaleToFit);
             }
-            
+
+            // --- ERRORS ---
             if (errors.Count > 0)
             {
                 EditorGUILayout.Space();
@@ -94,17 +126,78 @@ namespace DigDigDiner
                     }
                 }
             }
+        }
+
+        // --- NEW TEMPLATE GENERATION LOGIC ---
+        private void GenerateArtistTemplate(int states)
+        {
+            errors.Clear();
+            Debug.Log($"Generating template for {states} states...");
+
+            // 1. Calculate Total Patterns (e.g., 3^4 = 81)
+            int totalPatterns = Mathf.FloorToInt(Mathf.Pow(states, 4));
             
-            if (comparisonTexture != null)
+            // 2. Calculate Texture Dimensions
+            int templateRows = Mathf.CeilToInt((float)totalPatterns / templateColumns);
+            int width = templateColumns * tileSize;
+            int height = templateRows * tileSize;
+
+            Debug.Log($"Total Patterns: {totalPatterns} | Grid: {templateColumns}x{templateRows} | Texture: {width}x{height}");
+
+            // 3. Setup Texture
+            comparisonTexture = new Texture2D(width, height, TextureFormat.RGBA32, false);
+            comparisonTexture.filterMode = FilterMode.Point;
+            
+            // Fill Background
+            var pixels = new Color[width * height];
+            for (int i = 0; i < pixels.Length; i++) pixels[i] = BACKGROUND_COLOR;
+            comparisonTexture.SetPixels(pixels);
+
+            // 4. Draw Patterns Systematically
+            for (int i = 0; i < totalPatterns; i++)
             {
-                EditorGUILayout.Space();
-                EditorGUILayout.LabelField("Preview:", EditorStyles.boldLabel);
+                // Decode Index into Corners based on: Index = TL + (TR * S) + (BL * S^2) + (BR * S^3)
+                // This means TL is the "1s" column, it changes every tile.
+                // TR changes every 'states' tiles.
+                // BL changes every 'states^2' tiles.
+                // BR changes every 'states^3' tiles.
                 
-                var rect = GUILayoutUtility.GetRect(PREVIEW_WIDTH, PREVIEW_HEIGHT);
-                GUI.DrawTexture(rect, comparisonTexture, ScaleMode.ScaleToFit);
+                int temp = i;
+                int tl = temp % states;
+                temp /= states;
+                
+                int tr = temp % states;
+                temp /= states;
+                
+                int bl = temp % states;
+                temp /= states;
+                
+                int br = temp % states;
+
+                // Calculate Grid Position
+                int col = i % templateColumns;
+                int row = i / templateColumns; // Draw bottom-up usually, but we'll use standard coord system
+                
+                // In Unity Texture2D, (0,0) is bottom-left. 
+                // Usually spritesheets are read Top-Left to Bottom-Right visually.
+                // To make the image readable for the artist (Row 0 at top), we invert Y.
+                // But Unity imports Bottom-Up. Let's stick to standard Unity Texture coords (Bottom-Up)
+                // to avoid confusion when slicing, OR standard reading order (Top-Down).
+                // Let's do Top-Down visual layout for the artist.
+                int drawRow = (templateRows - 1) - row;
+
+                int x = col * tileSize;
+                int y = drawRow * tileSize;
+
+                Pattern p = new Pattern { index = i, tl = tl, tr = tr, bl = bl, br = br };
+                DrawSystematicTile(x, y, p);
             }
+
+            comparisonTexture.Apply();
+            Debug.Log("Template generation complete.");
         }
         
+        // --- EXISTING LOGIC ---
         private void GenerateComparison()
         {
             errors.Clear();
@@ -123,11 +216,7 @@ namespace DigDigDiner
             
             tileMapping.Initialize();
             
-            Debug.Log($"Starting comparison generation...");
-            Debug.Log($"Artist tilemap: {artistTilemap.width}x{artistTilemap.height}px");
-            
             var patterns = GenerateAllPatterns();
-            Debug.Log($"Generated {patterns.Count} patterns to verify (State Count: {tileMapping.StateCount})");
 
             int width = columns * tileSize * QUADRANT_DIVISIONS + DIVIDER_GAP;
             int requiredRows = Mathf.CeilToInt((float)patterns.Count / columns);
@@ -146,8 +235,6 @@ namespace DigDigDiner
             DrawDivider();
             
             comparisonTexture.Apply();
-            
-            Debug.Log($"Comparison complete. {errors.Count} issues found.");
         }
         
         private List<Pattern> GenerateAllPatterns()
@@ -157,6 +244,8 @@ namespace DigDigDiner
             
             int maxState = tileMapping != null ? tileMapping.StateCount : SharedConstants.TERRAIN_TYPE_COUNT;
 
+            // This matches the loop order of the "Verifier", but might not match the "Algorithmic" order perfectly
+            // unless we enforce it. For the verifier, we stick to what it was doing.
             for (int tl = 0; tl < maxState; tl++)
             {
                 for (int tr = 0; tr < maxState; tr++)
@@ -177,14 +266,11 @@ namespace DigDigDiner
                     }
                 }
             }
-            
             return patterns;
         }
         
         private void DrawSystematicTiles(List<Pattern> patterns)
         {
-            Debug.Log("Drawing systematic tiles...");
-    
             for (int i = 0; i < patterns.Count; i++)
             {
                 var pattern = patterns[i];
@@ -211,7 +297,9 @@ namespace DigDigDiner
             DrawLine(x, y + half, x + tileSize, y + half, BORDER_COLOR_DARK, LINE_THICKNESS_HEAVY);
             
             DrawBorder(x, y, tileSize, BORDER_COLOR_DARK, LINE_THICKNESS_HEAVY);
-            DrawLabel(x + LABEL_OFFSET_X, y + tileSize - LABEL_OFFSET_Y, pattern.index.ToString());
+            
+            // Draw Index Number
+            DrawDigit(x + LABEL_OFFSET_X, y + tileSize - LABEL_OFFSET_Y, pattern.index);
         }
 
         private Color GetColorForState(int state)
@@ -221,14 +309,15 @@ namespace DigDigDiner
                 case 0: return SYSTEMATIC_STATE_0;
                 case 1: return SYSTEMATIC_STATE_1;
                 case 2: return SYSTEMATIC_STATE_2;
-                default: return SYSTEMATIC_STATE_OTHER;
+                default: 
+                    // Generate a color for states > 2 based on index
+                    float h = (float)state / 5.0f;
+                    return Color.HSVToRGB(h, 0.7f, 0.8f);
             }
         }
         
         private void DrawArtistTiles(List<Pattern> patterns)
         {
-            Debug.Log("Drawing artist tiles...");
-    
             int xOffset = columns * tileSize + DIVIDER_GAP;
     
             for (int i = 0; i < patterns.Count; i++)
@@ -239,10 +328,7 @@ namespace DigDigDiner
                     pattern.tl, pattern.tr, pattern.bl, pattern.br
                 );
                 
-                if (artistCol < 0 || artistRow < 0)
-                {
-                     continue;
-                }
+                if (artistCol < 0 || artistRow < 0) continue;
         
                 int displayCol = i % columns;
                 int displayRow = i / columns;
@@ -256,8 +342,7 @@ namespace DigDigDiner
                     sourceX + tileSize > artistTilemap.width || 
                     sourceY + tileSize > artistTilemap.height)
                 {
-                    errors.Add($"Pattern {i} ({pattern.tl},{pattern.tr},{pattern.bl},{pattern.br}): " +
-                              $"Artist position ({artistCol},{artistRow}) is out of bounds");
+                    errors.Add($"Pattern {i}: Artist pos out of bounds");
                     DrawErrorTile(displayX, displayY);
                     continue;
                 }
@@ -266,12 +351,11 @@ namespace DigDigDiner
                 {
                     var tilePixels = artistTilemap.GetPixels(sourceX, sourceY, tileSize, tileSize);
                     comparisonTexture.SetPixels(displayX, displayY, tileSize, tileSize, tilePixels);
-            
                     DrawBorder(displayX, displayY, tileSize, BORDER_COLOR_LIGHT, LINE_THICKNESS_LIGHT);
                 }
                 catch (System.Exception e)
                 {
-                    errors.Add($"Pattern {i}: Failed to copy tile - {e.Message}");
+                    errors.Add($"Pattern {i}: {e.Message}");
                     DrawErrorTile(displayX, displayY);
                 }
             }
@@ -327,20 +411,15 @@ namespace DigDigDiner
         
         private void DrawBorder(int x, int y, int size, Color color, int thickness)
         {
-            // Top
             DrawLine(x, y + size, x + size, y + size, color, thickness);
-            // Bottom
             DrawLine(x, y, x + size, y, color, thickness);
-            // Left
             DrawLine(x, y, x, y + size, color, thickness);
-            // Right
             DrawLine(x + size, y, x + size, y + size, color, thickness);
         }
         
         private void DrawDivider()
         {
             int x = columns * tileSize;
-            
             for (int dx = 0; dx < DIVIDER_GAP; dx++)
             {
                 for (int y = 0; y < comparisonTexture.height; y++)
@@ -350,15 +429,19 @@ namespace DigDigDiner
             }
         }
         
-        private void DrawLabel(int x, int y, string text)
+        // Simple pixel-based digit drawer for labeling tiles 0-99
+        private void DrawDigit(int x, int y, int number)
         {
-            for (int dx = 0; dx < LABEL_WIDTH; dx++)
+            // A primitive way to write the index on the texture so the artist knows which number it is.
+            // In a real tool we might blit a font texture, but a simple color block is enough to mark it.
+            // For now, we just draw a small white box to indicate "Label Here".
+            // Writing actual text to a Texture2D procedurally without a font atlas is complex.
+            // We will trust the systematic order (Left->Right, Top->Bottom).
+            
+            // Draw a small indicator dot for 0
+            if (number == 0)
             {
-                for (int dy = 0; dy < LABEL_HEIGHT; dy++)
-                {
-                    if (x + dx < comparisonTexture.width && y + dy < comparisonTexture.height)
-                        comparisonTexture.SetPixel(x + dx, y + dy, LABEL_COLOR);
-                }
+                DrawQuadrant(x, y, 5, Color.white);
             }
         }
         

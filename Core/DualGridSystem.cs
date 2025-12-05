@@ -6,14 +6,12 @@ namespace DigDigDiner
 {
     public class DualGridSystem : MonoBehaviour
     {
-        [Header("Grid Configuration")]
-        [SerializeField] private int gridWidth = SharedConstants.GRID_WIDTH;
-        [SerializeField] private int gridHeight = SharedConstants.GRID_HEIGHT;
         
         [Header("Tilemap References")]
+        [Tooltip("Ensure this Tilemap has Anchor set to (0.5, 0.5, 0) for MG/FG, or (0, 0, 0) for BG/Decoration.")]
         [SerializeField] private Tilemap colorTilemap;
         [SerializeField] private Tilemap debugTilemap;
-
+        
         [Header("Tile Assets")]
         [SerializeField] private TileMapping tileMapping;
               
@@ -23,19 +21,22 @@ namespace DigDigDiner
         [SerializeField] private Color debugDiggableColor = SharedConstants.DEBUG_DIGGABLE_COLOR;
         [SerializeField] private Color debugUndiggableColor = SharedConstants.DEBUG_UNDIGGABLE_COLOR;
 
+        // Events
+        public event System.Action<int, int, Tile> OnTileChanged;
+
+        // Internal State
         private Tile[,] baseGrid;
         private TileEditorInputs inputActions;
         private Camera mainCamera;
         private static readonly Tile OUT_OF_BOUNDS_TILE = new Tile(TerrainType.Undiggable);      
         
-        public int Width => gridWidth;
-        public int Height => gridHeight;
+        public int Width => SharedConstants.GRID_WIDTH;
+        public int Height => SharedConstants.GRID_HEIGHT;
         public bool IsInitialized { get; private set; } = false;
-        public event System.Action<int,int, Tile> OnTileChanged;
         
         private void Awake()
         {
-            baseGrid = new Tile[gridHeight, gridWidth];
+            baseGrid = new Tile[Height, Width];
 
             if (tileMapping == null)
             {
@@ -47,6 +48,7 @@ namespace DigDigDiner
             tileMapping.Initialize();
 
             inputActions = new TileEditorInputs();
+            // Removed AlignGrid() call
             mainCamera = Camera.main;
         }
 
@@ -88,8 +90,8 @@ namespace DigDigDiner
 
             Vector2Int gridPos = WorldToBaseGrid(worldPos);
 
-            if (gridPos.x >= 0 && gridPos.x < gridWidth &&
-                gridPos.y >= 0 && gridPos.y < gridHeight)
+            if (gridPos.x >= 0 && gridPos.x < Width &&
+                gridPos.y >= 0 && gridPos.y < Height)
             {
                 CycleTileAt(gridPos.x, gridPos.y);
             }
@@ -108,9 +110,9 @@ namespace DigDigDiner
             
             if (!showDebugOverlay) return;
             
-            for (int y = 0; y < gridHeight; y++)
+            for (int y = 0; y < Height; y++)
             {
-                for (int x = 0; x < gridWidth; x++)
+                for (int x = 0; x < Width; x++)
                 {
                     var tile = GetTileAt(x, y);
                     if (tile != null)
@@ -143,9 +145,10 @@ namespace DigDigDiner
         
         public Tile GetTileAt(int x, int y)
         {
+            // NPE Guard
             if (baseGrid == null) return OUT_OF_BOUNDS_TILE;
 
-            if (x < 0 || x >= gridWidth || y < 0 || y >= gridHeight)
+            if (x < 0 || x >= Width || y < 0 || y >= Height)
             {
                 return OUT_OF_BOUNDS_TILE;
             }
@@ -154,17 +157,19 @@ namespace DigDigDiner
         
         public void SetTileAt(int x, int y, Tile tile)
         {
-            if (x >= 0 && x < gridWidth && y >= 0 && y < gridHeight)
+            if (x >= 0 && x < Width && y >= 0 && y < Height)
             {
                 baseGrid[y, x] = tile;
                 UpdateAffectedVisualTiles(x, y);
+                
+                // Invoke Event
                 OnTileChanged?.Invoke(x, y, tile);
             }
         }
 
         public void SetTileAtSilent(int x, int y, Tile tile)
         {
-            if (x >= 0 && x < gridWidth && y >= 0 && y < gridHeight)
+            if (x >= 0 && x < Width && y >= 0 && y < Height)
             {
                 baseGrid[y, x] = tile;
             }
@@ -204,7 +209,6 @@ namespace DigDigDiner
 
             if (colorTilemap != null)
                 colorTilemap.SetTile(tilePos, colorTile);
-            
         }
         
         private void UpdateAffectedVisualTiles(int baseX, int baseY)
@@ -213,7 +217,7 @@ namespace DigDigDiner
             {
                 for (int vy = baseY - 1; vy <= baseY; vy++)
                 {
-                    if (vx >= 0 && vx < gridWidth - 1 && vy >= 0 && vy < gridHeight - 1)
+                    if (vx >= 0 && vx < Width - 1 && vy >= 0 && vy < Height - 1)
                     {
                         UpdateVisualTile(vx, vy);
                     }
@@ -227,15 +231,15 @@ namespace DigDigDiner
 
             if (colorTilemap != null) colorTilemap.ClearAllTiles();
 
-            for (int y = 0; y < gridHeight - 1; y++)
+            for (int y = 0; y < Height - 1; y++)
             {
-                for (int x = 0; x < gridWidth - 1; x++)
+                for (int x = 0; x < Width - 1; x++)
                 {
                     UpdateVisualTile(x, y);
                 }
             }
             
-            Debug.Log($"Refreshed {(gridWidth-1)}x{(gridHeight-1)} visual tiles on {name}");
+            Debug.Log($"Refreshed {(Width-1)}x{(Height-1)} visual tiles on {name}");
         }
 
         public Vector2Int WorldToBaseGrid(Vector3 worldPos)
@@ -243,15 +247,7 @@ namespace DigDigDiner
             if (colorTilemap == null) return Vector2Int.zero;
 
             Vector3Int visualCell = colorTilemap.WorldToCell(worldPos);
-            Vector3 cellWorldPos = colorTilemap.CellToWorld(visualCell);
-            
-            float localX = (worldPos.x - cellWorldPos.x) / colorTilemap.cellSize.x;
-            float localY = (worldPos.y - cellWorldPos.y) / colorTilemap.cellSize.y;
-
-            int baseX = (localX >= 0.0f) ? visualCell.x + 1 : visualCell.x;
-            int baseY = (localY >= 0.0f) ? visualCell.y + 1 : visualCell.y;
-
-            return new Vector2Int(baseX, baseY);
+            return new Vector2Int(visualCell.x, visualCell.y);
         }
     }
 }
