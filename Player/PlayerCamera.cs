@@ -14,6 +14,7 @@ namespace DigDigDiner
         [Header("Settings")]
         [SerializeField] private float smoothTime = SharedConstants.PLAYER_CAMERA_SMOOTH_TIME;
         [SerializeField] private float boundPadding = SharedConstants.PLAYER_CAMERA_BOUND_PADDING;
+        [SerializeField] private float cameraOffsetZ = SharedConstants.PLAYER_CAMERA_OFFSET_Z;
         [SerializeField] private bool constrainToBounds = true;
 
         private DualGridSystem gridSystem;
@@ -85,7 +86,7 @@ namespace DigDigDiner
             if (player == null) return transform.position;
 
             Vector3 targetPosition = player.transform.position;
-            targetPosition.z = SharedConstants.PLAYER_CAMERA_OFFSET_Z;
+            targetPosition.z = cameraOffsetZ;
 
             // Constrain to bounds if enabled
             if (constrainToBounds)

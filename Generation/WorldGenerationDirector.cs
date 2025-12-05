@@ -10,16 +10,19 @@ namespace DigDigDiner
         [SerializeField] private bool generateOnStart = true;
 
         [Header("Layer Generators (Order of Execution)")]
-        [Tooltip("Phase 1: The furthest background layer (Parallax)")]
+        [Tooltip("DistantBG")]
         [SerializeField] private BackgroundMapGenerator distantBgGenerator;
 
-        [Tooltip("Phase 2: The middle background layer (Decoration)")]
+        [Tooltip("BG")]
         [SerializeField] private BackgroundMapGenerator midBgGenerator;
 
-        [Tooltip("Phase 3: The main gameplay layout")]
+        [Tooltip("MG")]
         [SerializeField] private MapGenerator miningGenerator;
 
-        [Tooltip("Phase 4: The foreground occlusion based on Mining layer")]
+        [Tooltip("MGDecoration")]
+        [SerializeField] private DecorationMapGenerator decorationGenerator;
+
+        [Tooltip("FG")]
         [SerializeField] private ForegroundMapGenerator foregroundGenerator;
 
         private void Start()
@@ -58,7 +61,12 @@ namespace DigDigDiner
             {
                 Debug.LogError("Director: Critical Error - Mining Generator is missing!");
             }
-
+            
+            if (decorationGenerator != null)
+            {
+                decorationGenerator.Generate(globalSeed);
+            }
+            
             if (foregroundGenerator != null)
             {
                 foregroundGenerator.Generate(globalSeed);

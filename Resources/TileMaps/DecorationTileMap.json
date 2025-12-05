@@ -1,0 +1,10 @@
+{
+    "patterns": [
+        { 
+            "index": 0, 
+            "col": 0, 
+            "row": 0, 
+            "pattern": [1, 1, 1, 1] 
+        }
+    ]
+}
