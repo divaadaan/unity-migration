@@ -13,23 +13,16 @@ namespace DigDigDiner
         [Header("Tilemap References")]
         [SerializeField] private Tilemap colorTilemap;
         [SerializeField] private Tilemap debugTilemap;
-        // Optional: If you use a separate normal map tilemap in future, add it here.
-        // [SerializeField] private Tilemap normalTilemap; 
-        
+
         [Header("Tile Assets")]
-        // We ONLY need the mapping now. The mapping holds the assets.
         [SerializeField] private TileMapping tileMapping;
-        
-        [Header("Visual Settings")]
-        [SerializeField] private Vector2 visualOffset = SharedConstants.VISUAL_OFFSET;
-        
+              
         [Header("Debug Settings")]
         [SerializeField] private bool showDebugOverlay = false;
         [SerializeField] private Color debugEmptyColor = SharedConstants.DEBUG_EMPTY_COLOR;
         [SerializeField] private Color debugDiggableColor = SharedConstants.DEBUG_DIGGABLE_COLOR;
         [SerializeField] private Color debugUndiggableColor = SharedConstants.DEBUG_UNDIGGABLE_COLOR;
 
-        // Class member variables
         private Tile[,] baseGrid;
         private TileEditorInputs inputActions;
         private Camera mainCamera;
@@ -41,7 +34,6 @@ namespace DigDigDiner
         
         private void Awake()
         {
-            // Initialize the base grid array (MapGenerator will populate it)
             baseGrid = new Tile[gridHeight, gridWidth];
 
             if (tileMapping == null)
@@ -54,7 +46,6 @@ namespace DigDigDiner
             tileMapping.Initialize();
 
             inputActions = new TileEditorInputs();
-            AlignGrid();
             mainCamera = Camera.main;
         }
 
@@ -72,16 +63,6 @@ namespace DigDigDiner
             inputActions.GameplayMap.ToggleDebug.performed -= ToggleDebugOverlay;
             inputActions.GameplayMap.TileEdit.performed -= OnTileEdit;
             inputActions.Disable();
-        }
-
-        private void AlignGrid()
-        {
-            if (colorTilemap != null && colorTilemap.layoutGrid != null)
-            {
-                Grid grid = colorTilemap.layoutGrid;
-                Vector3 currentPos = grid.transform.position;
-                grid.transform.position = new Vector3(visualOffset.x, visualOffset.y, currentPos.z);
-            }
         }
 
         public void CompleteInitialization()
@@ -161,6 +142,8 @@ namespace DigDigDiner
         
         public Tile GetTileAt(int x, int y)
         {
+            if (baseGrid == null) return OUT_OF_BOUNDS_TILE;
+
             if (x < 0 || x >= gridWidth || y < 0 || y >= gridHeight)
             {
                 return OUT_OF_BOUNDS_TILE;
@@ -211,24 +194,15 @@ namespace DigDigDiner
             var bl = GetTileAt(visualX, visualY);
             var br = GetTileAt(visualX + 1, visualY);
             
-            // --- NEW LOGIC START ---
-            // Ask TileMapping for the correct TileBase asset directly.
-            // This handles the logic for 3-state vs 2-state AND the "Allow Zero Pattern" check internally.
-            
-            // Note: We use the int-based stateIndex from our new Tile class
-            // This works for both TerrainType (Mining) and ParallaxState (BG)
             TileBase colorTile = tileMapping.GetTile(
                 tl.stateIndex, tr.stateIndex, bl.stateIndex, br.stateIndex
             );
 
-            // Set the tile (null clears it)
             Vector3Int tilePos = new Vector3Int(visualX, visualY, 0);
 
             if (colorTilemap != null)
                 colorTilemap.SetTile(tilePos, colorTile);
             
-            // If you add a separate Normal Map tilemap later, you can ask for the normal tile here too.
-            // --- NEW LOGIC END ---
         }
         
         private void UpdateAffectedVisualTiles(int baseX, int baseY)
@@ -247,6 +221,8 @@ namespace DigDigDiner
         
         public void RefreshAllVisualTiles()
         {
+            if (baseGrid == null) return;
+
             if (colorTilemap != null) colorTilemap.ClearAllTiles();
 
             for (int y = 0; y < gridHeight - 1; y++)
@@ -270,8 +246,8 @@ namespace DigDigDiner
             float localX = (worldPos.x - cellWorldPos.x) / colorTilemap.cellSize.x;
             float localY = (worldPos.y - cellWorldPos.y) / colorTilemap.cellSize.y;
 
-            int baseX = (localX >= 0.5f) ? visualCell.x + 1 : visualCell.x;
-            int baseY = (localY >= 0.5f) ? visualCell.y + 1 : visualCell.y;
+            int baseX = (localX >= 0.0f) ? visualCell.x + 1 : visualCell.x;
+            int baseY = (localY >= 0.0f) ? visualCell.y + 1 : visualCell.y;
 
             return new Vector2Int(baseX, baseY);
         }

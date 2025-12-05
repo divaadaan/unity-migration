@@ -13,9 +13,7 @@ namespace DigDigDiner
         
         public const int SOURCE_TILE_SIZE = 200;  
         public const float RENDER_TILE_SIZE = 1.0f; 
-        
-        public static readonly Vector2 VISUAL_OFFSET = new Vector2(-0.5f, -0.5f);
-        
+               
         public const int TERRAIN_TYPE_COUNT = 3; 
         public const int TOTAL_POSSIBLE_PATTERNS = 81; 
         
