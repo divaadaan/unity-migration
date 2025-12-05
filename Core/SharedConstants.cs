@@ -4,8 +4,8 @@ namespace DigDigDiner
 {
     public static class SharedConstants
     {
-        public const int GRID_WIDTH = 40;
-        public const int GRID_HEIGHT = 40;
+        public const int GRID_WIDTH = 50;
+        public const int GRID_HEIGHT = 50;
         
         public const int TILEMAP_COLUMNS = 8;
         public const int TILEMAP_ROWS = 10;
