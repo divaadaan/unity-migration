@@ -14,7 +14,7 @@ namespace DigDigDiner
         [Header("Settings")]
         [SerializeField] private float smoothTime = SharedConstants.PLAYER_CAMERA_SMOOTH_TIME;
         [SerializeField] private float boundPadding = SharedConstants.PLAYER_CAMERA_BOUND_PADDING;
-        [SerializeField] private float cameraOffsetZ = SharedConstants.PLAYER_CAMERA_OFFSET_Z;
+        [SerializeField] private float cameraOffsetZ = -10f;
         [SerializeField] private bool constrainToBounds = true;
 
         private DualGridSystem gridSystem;

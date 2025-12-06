@@ -127,10 +127,6 @@ namespace DigDigDiner
             // Input handler will call TryMove and TryDig based on input
         }
 
-        /// <summary>
-        /// Attempts to move the player in the specified direction.
-        /// Called by PlayerInputHandler when movement input is detected.
-        /// </summary>
         public void TryMove(Vector2Int direction)
         {
             // Always update facing direction (even if movement is blocked)
@@ -154,10 +150,6 @@ namespace DigDigDiner
             }
         }
 
-        /// <summary>
-        /// Attempts to dig in the facing direction.
-        /// Called by PlayerInputHandler when dig input is detected.
-        /// </summary>
         public void TryDig()
         {
             Vector2Int digTarget = gridPosition + facingDirection;
@@ -173,9 +165,6 @@ namespace DigDigDiner
             }
         }
 
-        /// <summary>
-        /// Checks if a grid position is valid and walkable.
-        /// </summary>
         public bool IsValidPosition(Vector2Int pos)
         {
             // Check bounds
@@ -190,19 +179,11 @@ namespace DigDigDiner
             return tile != null && tile.terrainType == TerrainType.Empty;
         }
 
-        /// <summary>
-        /// Updates the GameObject's world position based on grid position.
-        /// </summary>
         private void UpdateWorldPosition()
         {
             // Convert grid position to world position
             // Grid positions are at integer coordinates, center the player on them
-            Vector3 worldPos = new Vector3(
-                gridPosition.x, 
-                gridPosition.y, 
-                SharedConstants.PLAYER_Z_POSITION
-            );
-            transform.position = worldPos;
+            transform.position = (Vector2)gridPosition;
         }
 
         /// <summary>
