@@ -67,23 +67,16 @@ namespace DigDigDiner
 
             int blobCount = random.Next(config.minCount, config.maxCount + 1);
 
-            if (showDebugLogs)
-                Debug.Log($"BlobSpawner: Spawning {blobCount} blobs for '{config.configName}' ({config.terrainType})");
-
             for (int i = 0; i < blobCount; i++)
             {
                 if (!TrySpawnBlob(config, out var blobPositions))
                 {
-                    if (showDebugLogs)
-                        Debug.LogWarning($"BlobSpawner: Failed to spawn blob {i + 1}/{blobCount} for '{config.configName}'");
                     continue;
                 }
 
                 // Mark positions as occupied
                 occupiedPositions.AddRange(blobPositions);
 
-                if (showDebugLogs)
-                    Debug.Log($"BlobSpawner: Spawned blob {i + 1}/{blobCount} with {blobPositions.Count} tiles");
             }
         }
 

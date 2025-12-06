@@ -143,10 +143,6 @@ namespace DigDigDiner
                 gridPosition = newPosition;
                 UpdateWorldPosition();
             }
-            else
-            {
-                Debug.Log($"Player movement blocked at {newPosition}");
-            }
         }
 
         public void TryDig()
