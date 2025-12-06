@@ -3,22 +3,15 @@ using System.Collections.Generic;
 
 namespace DigDigDiner
 {
-    /// <summary>
-    /// Modular map generator that uses blob-based generation for structure.
-    /// Biome visuals are handled entirely by the Shader (World Position -> Biome Map -> LUT).
-    /// </summary>
     [RequireComponent(typeof(DualGridSystem))]
     public class MapGenerator : MonoBehaviour
     {
-        [Header("Generation Strategy")]
-        [SerializeField] private GenerationMode generationMode = GenerationMode.BlobMap;
-
         [Header("Entrance Settings")]
         [SerializeField] private int entranceNeckWidth = 2;
         [SerializeField] private int entranceNeckLength = 3;
         [SerializeField] private int spawnAreaHeight = 2;
 
-        [Header("Blob Spawn Configurations")]
+        [Header("Biome Configuration")]
         [SerializeField] private List<BlobSpawner.BlobSpawnConfig> emptyPocketConfigs = new List<BlobSpawner.BlobSpawnConfig>();
         [SerializeField] private List<BlobSpawner.BlobSpawnConfig> undiggablePocketConfigs = new List<BlobSpawner.BlobSpawnConfig>();
 
@@ -26,260 +19,50 @@ namespace DigDigDiner
         [SerializeField] private bool showDebugLogs = true;
 
         private DualGridSystem gridSystem;
-        private BlobSpawner blobSpawner;
-        private System.Random random;
-
-        public enum GenerationMode
-        {
-            BlobMap     // New blob-based generation
-        }
 
         private void Awake()
         {
             gridSystem = GetComponent<DualGridSystem>();
-            random = new System.Random();
-
-            // Initialize default configurations if empty
-            if (emptyPocketConfigs.Count == 0)
-            {
-                InitializeDefaultEmptyConfigs();
-            }
-
-            if (undiggablePocketConfigs.Count == 0)
-            {
-                InitializeDefaultUndiggableConfigs();
-            }
+            
+            // Initialize defaults if list is empty (Safety check)
+            if (emptyPocketConfigs.Count == 0) InitializeDefaultConfigs();
         }
 
-        /// <summary>
-        /// Main map generation entry point.
-        /// </summary>
         public void GenerateMap(int? externalSeed = null)
         {
-            if (showDebugLogs)
-                Debug.Log($"MapGenerator: Starting {generationMode} generation...");
-            
-            // Initialize Random with explicit seed if provided
-            if (externalSeed.HasValue)
-            {
-                random = new System.Random(externalSeed.Value);
-            }
-            else if (random == null)
-            {
-                random = new System.Random();
-            }
+            int seed = externalSeed ?? 12345;
+            if (showDebugLogs) Debug.Log($"MapGenerator: Starting Pipeline (Seed: {seed})...");
 
-            switch (generationMode)
+            // --- THE PIPELINE ---
+            List<IMapStrategy> pipeline = new List<IMapStrategy>();
+            pipeline.Add(new FillMapStrategy(TerrainType.Diggable));
+            pipeline.Add(new BlobGenerationStrategy(emptyPocketConfigs));
+            pipeline.Add(new BlobGenerationStrategy(undiggablePocketConfigs));
+            pipeline.Add(new BorderMapStrategy());
+            pipeline.Add(new EntranceMapStrategy(entranceNeckWidth, entranceNeckLength, spawnAreaHeight));
+
+            foreach (var strategy in pipeline)
             {
-                case GenerationMode.BlobMap:
-                    GenerateBlobMap();
-                    break;
+                strategy.Execute(gridSystem, seed);
             }
 
-            if (showDebugLogs)
-                Debug.Log("MapGenerator: Generation complete!");
-        }
-
-        /// <summary>
-        /// Generates a blob-based map with configurable pockets of terrain.
-        /// </summary>
-        private void GenerateBlobMap()
-        {
-            FillWithDiggableTerrain();
-            GenerateBorder();
-            GenerateEntranceNeck();
-
-            blobSpawner = new BlobSpawner(gridSystem, random);
-            foreach (var config in emptyPocketConfigs)
-            {
-                blobSpawner.SpawnBlobs(config, showDebugLogs);
-            }
-
-            // Spawn Undiggable pockets
-            foreach (var config in undiggablePocketConfigs)
-            {
-                blobSpawner.SpawnBlobs(config, showDebugLogs);
-            }
             gridSystem.CompleteInitialization();
-
-            if (showDebugLogs)
-            {
-                Debug.Log($"MapGenerator: Blob map complete with {emptyPocketConfigs.Count} empty configs and {undiggablePocketConfigs.Count} obstacle configs");
-            }
+            
+            if (showDebugLogs) Debug.Log("MapGenerator: Pipeline Complete.");
         }
 
-        /// <summary>
-        /// Fills the entire map with diggable terrain as the base layer.
-        /// </summary>
-        private void FillWithDiggableTerrain()
+        private void InitializeDefaultConfigs()
         {
-            for (int y = 0; y < gridSystem.Height; y++)
-            {
-                for (int x = 0; x < gridSystem.Width; x++)
-                {
-                    gridSystem.SetTileAtSilent(x, y, new Tile(TerrainType.Diggable));
-                }
-            }
-
-            if (showDebugLogs)
-                Debug.Log("MapGenerator: Filled map with Diggable terrain");
-        }
-
-        /// <summary>
-        /// Creates an undiggable border around the map perimeter.
-        /// </summary>
-        private void GenerateBorder()
-        {
-            for (int x = 0; x < gridSystem.Width; x++)
-            {
-                gridSystem.SetTileAtSilent(x, 0, new Tile(TerrainType.Undiggable));
-                gridSystem.SetTileAtSilent(x, gridSystem.Height - 1, new Tile(TerrainType.Undiggable));
-            }
-
-            for (int y = 0; y < gridSystem.Height; y++)
-            {
-                gridSystem.SetTileAtSilent(0, y, new Tile(TerrainType.Undiggable));
-                gridSystem.SetTileAtSilent(gridSystem.Width - 1, y, new Tile(TerrainType.Undiggable));
-            }
-
-            if (showDebugLogs)
-                Debug.Log("MapGenerator: Created undiggable border");
-        }
-
-        /// <summary>
-        /// Generates entrance with spawn area at top and diggable neck leading down.
-        /// Returns the bottom position of the entrance.
-        /// </summary>
-        private Vector2Int GenerateEntranceNeck()
-        {
-            int centerX = gridSystem.Width / 2;
-            int topY = gridSystem.Height - 1;
-            int neckStartY = topY - spawnAreaHeight;
-            int neckEndY = neckStartY - entranceNeckLength;
-
-            if (showDebugLogs)
-            {
-                Debug.Log($"MapGenerator: Entrance generation - CenterX:{centerX}, TopY:{topY}, NeckStartY:{neckStartY}, NeckEndY:{neckEndY}");
-                Debug.Log($"MapGenerator: Entrance width: {entranceNeckWidth}, spawn height: {spawnAreaHeight}, neck length: {entranceNeckLength}");
-            }
-
-            // Create empty spawn area at the top (player spawns here)
-            int emptyTilesCreated = 0;
-            for (int y = topY; y > neckStartY && y >= 0; y--)
-            {
-                for (int dx = -entranceNeckWidth / 2; dx <= entranceNeckWidth / 2; dx++)
-                {
-                    int x = centerX + dx;
-                    if (x >= 0 && x < gridSystem.Width)
-                    {
-                        gridSystem.SetTileAtSilent(x, y, new Tile(TerrainType.Empty));
-                        emptyTilesCreated++;
-                    }
-                }
-            }
-
-            if (showDebugLogs)
-                Debug.Log($"MapGenerator: Created {emptyTilesCreated} Empty spawn tiles");
-
-            // Create diggable neck passage (player may dig through this to access map)
-            for (int y = neckStartY; y > neckEndY && y > 0; y--)
-            {
-                for (int dx = -entranceNeckWidth / 2; dx <= entranceNeckWidth / 2; dx++)
-                {
-                    int x = centerX + dx;
-                    if (x > 0 && x < gridSystem.Width - 1)
-                    {
-                        gridSystem.SetTileAtSilent(x, y, new Tile(TerrainType.Diggable));
-                    }
-                }
-            }
-
-            Vector2Int entranceBottom = new Vector2Int(centerX, neckEndY);
-            Vector2Int spawnPosition = new Vector2Int(centerX, topY - 1);
-
-            if (showDebugLogs)
-                Debug.Log($"MapGenerator: Spawn area at {spawnPosition}, diggable neck from {neckStartY} to {neckEndY}");
-
-            return entranceBottom;
-        }
-
-        /// <summary>
-        /// Initializes default Empty pocket configurations.
-        /// </summary>
-        private void InitializeDefaultEmptyConfigs()
-        {
-            // Large open chambers
+            // Fallback config just in case inspector is empty
             emptyPocketConfigs.Add(new BlobSpawner.BlobSpawnConfig
             {
-                configName = "Large Chambers",
+                configName = "Default Caverns",
                 terrainType = TerrainType.Empty,
-                minCount = 3,
-                maxCount = 5,
-                minSpacing = 6,
-                spawnProbability = 1.0f,
-                largeBlobWeight = 0.8f,
-                snakeBlobWeight = 0.2f
-            });
-
-            // Snake-like tunnels
-            emptyPocketConfigs.Add(new BlobSpawner.BlobSpawnConfig
-            {
-                configName = "Winding Tunnels",
-                terrainType = TerrainType.Empty,
-                minCount = 2,
-                maxCount = 4,
-                minSpacing = 4,
-                spawnProbability = 0.8f,
-                largeBlobWeight = 0.2f,
-                snakeBlobWeight = 0.8f
+                minCount = 3, maxCount = 5,
+                spawnProbability = 1.0f
             });
         }
 
-        /// <summary>
-        /// Initializes default Undiggable pocket configurations.
-        /// </summary>
-        private void InitializeDefaultUndiggableConfigs()
-        {
-            undiggablePocketConfigs.Add(new BlobSpawner.BlobSpawnConfig
-            {
-                configName = "Bedrock Pillars",
-                terrainType = TerrainType.Undiggable,
-                minCount = 4,
-                maxCount = 8,
-                minSpacing = 4,
-                spawnProbability = 1.0f,
-                largeBlobWeight = 0.85f, // Mostly solid chunks
-                snakeBlobWeight = 0.15f
-            });
-
-            undiggablePocketConfigs.Add(new BlobSpawner.BlobSpawnConfig
-            {
-                configName = "Hard Rock Veins",
-                terrainType = TerrainType.Undiggable,
-                minCount = 2,
-                maxCount = 5,
-                minSpacing = 5,
-                spawnProbability = 0.85f,
-                largeBlobWeight = 0.1f,
-                snakeBlobWeight = 0.9f // Mostly snake-like walls
-            });
-
-            undiggablePocketConfigs.Add(new BlobSpawner.BlobSpawnConfig
-            {
-                configName = "Rubble Patches",
-                terrainType = TerrainType.Undiggable,
-                minCount = 3,
-                maxCount = 6,
-                minSpacing = 3,
-                spawnProbability = 0.6f,
-                largeBlobWeight = 0.5f,
-                snakeBlobWeight = 0.5f
-            });
-        }
-
-        /// <summary>
-        /// Context menu command to regenerate the map.
-        /// </summary>
         [ContextMenu("Regenerate Map")]
         public void RegenerateMap()
         {
