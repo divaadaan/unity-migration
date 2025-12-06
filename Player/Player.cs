@@ -142,7 +142,6 @@ namespace DigDigDiner
             {
                 gridPosition = newPosition;
                 UpdateWorldPosition();
-                Debug.Log($"Player moved to {gridPosition}, facing {facingDirection}");
             }
             else
             {
@@ -157,11 +156,9 @@ namespace DigDigDiner
             if (digging.CanDigAt(digTarget))
             {
                 digging.DigAt(digTarget);
-                Debug.Log($"Player dug tile at {digTarget}");
             }
             else
             {
-                Debug.Log($"Cannot dig at {digTarget}");
             }
         }
 

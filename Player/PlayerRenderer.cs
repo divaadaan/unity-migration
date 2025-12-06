@@ -115,12 +115,6 @@ namespace DigDigDiner
             if (digging != null && digging.CanDigAt(digTarget))
             {
                 digPreviewObject.SetActive(true);
-                // Preview should be relative to player if parented, but here we want grid snap.
-                // Since digPreviewObject is child of Player (which moves smoothly), 
-                // we must offset it counter to the player's sub-tile movement if we wanted it locked to grid.
-                // However, simpler is to just unparent it or handle it differently.
-                // For now, let's keep it simple: It highlights the RELATIVE target.
-                // Local position 1 unit away in facing direction.
                 digPreviewObject.transform.localPosition = new Vector3(player.FacingDirection.x, player.FacingDirection.y, 0);
             }
             else

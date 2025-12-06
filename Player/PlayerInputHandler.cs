@@ -89,7 +89,6 @@ namespace DigDigDiner
 
             if (moveDirection != Vector2Int.zero)
             {
-                Debug.Log($"PlayerInputHandler: Attempting move {moveDirection}");
                 player.TryMove(moveDirection);
                 lastMoveTime = Time.time;
             }
@@ -97,7 +96,6 @@ namespace DigDigDiner
 
         private void OnDigPerformed(InputAction.CallbackContext context)
         {
-            Debug.Log("PlayerInputHandler: Dig action performed");
             if (player != null)
             {
                 player.TryDig();

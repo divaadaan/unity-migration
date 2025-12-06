@@ -63,9 +63,6 @@ namespace DigDigDiner
             Tile newTile = new Tile(TerrainType.Empty);
             gridSystem.SetTileAt(targetPosition.x, targetPosition.y, newTile);
 
-            Debug.Log($"PlayerDigging: Dug tile at {targetPosition}, converted to Empty");
-
-            // DualGridSystem.SetTileAt automatically updates affected visual tiles
         }
 
         /// <summary>
