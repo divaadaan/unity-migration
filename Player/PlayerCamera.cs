@@ -3,7 +3,7 @@ using UnityEngine;
 namespace DigDigDiner
 {
     /// <summary>
-    /// Camera that smoothly follows the player with boundary constraints.
+    /// Camera that follows the player with boundary constraints.
     /// </summary>
     [RequireComponent(typeof(Camera))]
     public class PlayerCamera : MonoBehaviour
@@ -14,14 +14,15 @@ namespace DigDigDiner
         [Header("Settings")]
         [SerializeField] private float smoothTime = SharedConstants.PLAYER_CAMERA_SMOOTH_TIME;
         [SerializeField] private float boundPadding = SharedConstants.PLAYER_CAMERA_BOUND_PADDING;
-        [SerializeField] private float cameraOffsetZ = -10f;
+        
         [SerializeField] private bool constrainToBounds = true;
 
         private DualGridSystem gridSystem;
         private Camera cam;
         private Vector3 velocity = Vector3.zero;
+        private float initialZOffset; 
 
-        // Camera bounds (calculated based on grid size)
+        // Camera bounds
         private float minX, maxX, minY, maxY;
 
         private void Awake()
@@ -31,7 +32,7 @@ namespace DigDigDiner
 
         private void Start()
         {
-            // 1. Find Player if missing
+            // Find Player if missing
             if (player == null)
             {
                 player = FindFirstObjectByType<Player>();
@@ -43,12 +44,12 @@ namespace DigDigDiner
                 }
             }
 
-            gridSystem = player.GridSystem;
+            initialZOffset = transform.position.z - player.transform.position.z;
 
+            gridSystem = player.GridSystem;
             if (gridSystem == null)
             {
                 gridSystem = FindFirstObjectByType<DualGridSystem>();
-                
                 if (gridSystem == null)
                 {
                     Debug.LogError("PlayerCamera: No DualGridSystem found! Camera disabled.");
@@ -59,6 +60,7 @@ namespace DigDigDiner
 
             CalculateCameraBounds();
 
+            // Snap immediately to target on start 
             Vector3 targetPosition = GetTargetPosition();
             transform.position = targetPosition;
             
@@ -69,10 +71,8 @@ namespace DigDigDiner
         {
             if (player == null) return;
 
-            // Get target position (player position + camera offset)
             Vector3 targetPosition = GetTargetPosition();
 
-            // Smoothly move camera towards target
             transform.position = Vector3.SmoothDamp(
                 transform.position,
                 targetPosition,
@@ -85,10 +85,10 @@ namespace DigDigDiner
         {
             if (player == null) return transform.position;
 
+            // Target is Player Position + the initial Z gap
             Vector3 targetPosition = player.transform.position;
-            targetPosition.z = cameraOffsetZ;
+            targetPosition.z += initialZOffset; 
 
-            // Constrain to bounds if enabled
             if (constrainToBounds)
             {
                 targetPosition.x = Mathf.Clamp(targetPosition.x, minX, maxX);
@@ -100,23 +100,39 @@ namespace DigDigDiner
 
         private void CalculateCameraBounds()
         {
-            if (gridSystem == null || cam == null) return;
+            if (gridSystem == null || cam == null || player == null) return;
 
-            // Get camera dimensions in world units
-            float cameraHeight = cam.orthographicSize * 2f;
-            float cameraWidth = cameraHeight * cam.aspect;
+            float halfHeight, halfWidth;
 
-            float halfWidth = cameraWidth / 2f;
-            float halfHeight = cameraHeight / 2f;
+            if (cam.orthographic)
+            {
+                halfHeight = cam.orthographicSize;
+                halfWidth = halfHeight * cam.aspect;
+            }
+            else // *** NEW PERSPECTIVE LOGIC ***
+            {
+                // Calculate distance from Camera to Player's Plane (MG Layer)
+                // We use Abs to ensure positive distance regardless of which way Z points
+                float distanceToPlayer = Mathf.Abs(transform.position.z - player.transform.position.z);
+                
+                // Calculate the visible height at that specific distance
+                // h = 2 * distance * tan(FOV/2)
+                // Note: FOV is vertical in Unity
+                float frustumHeight = 2.0f * distanceToPlayer * Mathf.Tan(cam.fieldOfView * 0.5f * Mathf.Deg2Rad);
+                
+                halfHeight = frustumHeight / 2f;
+                halfWidth = halfHeight * cam.aspect;
+            }
 
             // Calculate bounds based on grid size
+            // We use gridSystem.Width to ensure we stop exactly at the map edge
             minX = halfWidth - boundPadding;
             maxX = gridSystem.Width - halfWidth + boundPadding;
 
             minY = halfHeight - boundPadding;
             maxY = gridSystem.Height - halfHeight + boundPadding;
 
-            // Ensure min doesn't exceed max (for small grids)
+            // Safety check for small maps
             if (minX > maxX)
             {
                 float centerX = (minX + maxX) / 2f;
@@ -128,8 +144,7 @@ namespace DigDigDiner
                 float centerY = (minY + maxY) / 2f;
                 minY = maxY = centerY;
             }
-
-            Debug.Log($"PlayerCamera: Bounds calculated - X:[{minX:F2}, {maxX:F2}], Y:[{minY:F2}, {maxY:F2}]");
+            
         }
 
         public void RecalculateBounds()
@@ -142,12 +157,13 @@ namespace DigDigDiner
             player = newPlayer;
             if (player != null)
             {
+                // Update Z offset for new player if needed
+                initialZOffset = transform.position.z - player.transform.position.z;
                 gridSystem = player.GridSystem;
                 CalculateCameraBounds();
             }
         }
-
-#if UNITY_EDITOR
+        #if UNITY_EDITOR
         private void OnDrawGizmos()
         {
             if (!Application.isPlaying || !constrainToBounds) return;
@@ -163,6 +179,8 @@ namespace DigDigDiner
             Gizmos.DrawLine(topRight, topLeft);
             Gizmos.DrawLine(topLeft, bottomLeft);
         }
-#endif
+    #endif
+
     }
 }
+
