@@ -24,7 +24,7 @@ namespace DigDigDiner
         {
             gridSystem = GetComponent<DualGridSystem>();
             
-            // Initialize defaults if list is empty (Safety check)
+            // Initialize defaults if list is empty
             if (emptyPocketConfigs.Count == 0) InitializeDefaultConfigs();
         }
 
