@@ -1,78 +1,70 @@
 using UnityEngine;
+using UnityEngine.Tilemaps;
 
 namespace DigDigDiner
 {
     /// <summary>
-    /// Generates decoration tiles that overlay specific terrain types in the mining layer.
+    /// Generates decoration tiles based on the VERTEX state of the mining layer.
+    /// Places tiles directly on the integer coordinates, aligning with the Debug Grid.
     /// </summary>
     public class DecorationMapGenerator : MonoBehaviour
     {
-        [Header("Grid References")]
+        [Header("References")]
         [Tooltip("The source grid to read from (MiningGameSystem)")]
         [SerializeField] private DualGridSystem sourceGrid;
         
-        [Tooltip("The target grid to write to (Decoration)")]
-        [SerializeField] private DualGridSystem targetGrid;
+        [Tooltip("The standard Unity Tilemap to write to (Remove DualGridSystem from this object)")]
+        [SerializeField] private Tilemap targetTilemap;
+
+        [Header("Assets")]
+        [Tooltip("The visual tile asset to place at active locations.")]
+        [SerializeField] private TileBase decorationTile;
 
         [Header("Generation Rules")]
         [Tooltip("Decoration tiles will spawn on top of these terrain types.")]
         [SerializeField] private bool overlayDiggable = true;
         [SerializeField] private bool overlayUndiggable = true;
-
-        [Header("Settings")]
-        [Tooltip("State index for the decoration tile (1 for Active).")]
-        [SerializeField] private int activeStateIndex = 1;
-        
-        [Tooltip("State index for empty space (usually 0).")]
-        [SerializeField] private int emptyStateIndex = 0;
        
         [SerializeField] private int seed = 12345;
         [SerializeField] private bool useDirectorSeed = true;
 
-        /// <summary>
-        /// Generates the decoration layer based on the source grid layout.
-        /// </summary>
         public void Generate(int? externalSeed = null)
         {
-            if (sourceGrid == null || targetGrid == null)
+            if (sourceGrid == null || targetTilemap == null || decorationTile == null)
             {
-                Debug.LogError($"DecorationMapGenerator ({name}): Missing grid references!");
+                Debug.LogError($"DecorationMapGenerator ({name}): Missing references!");
                 return;
             }
 
             int currentSeed = (useDirectorSeed && externalSeed.HasValue) ? externalSeed.Value : seed;
+            Debug.Log($"DecorationMapGenerator: Generating Vertex Layer (Seed: {currentSeed})...");
 
-            Debug.Log($"DecorationMapGenerator: Generating layer (Seed: {currentSeed})...");
+            // Clear the existing standard tilemap
+            targetTilemap.ClearAllTiles();
 
-            for (int x = 0; x < targetGrid.Width; x++)
+            for (int x = 0; x < sourceGrid.Width; x++)
             {
-                for (int y = 0; y < targetGrid.Height; y++)
+                for (int y = 0; y < sourceGrid.Height; y++)
                 {
-                    int targetState = emptyStateIndex;
+                    // Check the vertex state from the Source Grid
+                    Tile sourceTile = sourceGrid.GetTileAt(x, y);
 
-                    // Ensure we are within bounds of the source grid
-                    if (x < sourceGrid.Width && y < sourceGrid.Height)
+                    if (sourceTile != null)
                     {
-                        Tile sourceTile = sourceGrid.GetTileAt(x, y);
+                        bool shouldPlace = 
+                            (overlayDiggable && sourceTile.terrainType == TerrainType.Diggable) ||
+                            (overlayUndiggable && sourceTile.terrainType == TerrainType.Undiggable);
 
-                        if (sourceTile != null)
+                        if (shouldPlace)
                         {
-                            bool isValidTerrain = 
-                                (overlayDiggable && sourceTile.terrainType == TerrainType.Diggable) ||
-                                (overlayUndiggable && sourceTile.terrainType == TerrainType.Undiggable);
-
-                            if (isValidTerrain)
-                            {
-                                targetState = activeStateIndex;
-                            }
+                            // Place the tile directly at the integer coordinate (Vertex)
+                            // This matches the behavior of the Debug Tilemap
+                            targetTilemap.SetTile(new Vector3Int(x, y, 0), decorationTile);
                         }
                     }
-
-                    targetGrid.SetTileAtSilent(x, y, new Tile(targetState));
                 }
             }
 
-            targetGrid.RefreshAllVisualTiles();
             Debug.Log($"DecorationMapGenerator: Generation Complete for {name}.");
         }
     }

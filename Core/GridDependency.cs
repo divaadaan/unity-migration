@@ -1,22 +1,22 @@
 using UnityEngine;
+using UnityEngine.Tilemaps;
 
 namespace DigDigDiner
 {
     /// <summary>
-    /// Links a dependent grid (Target) to a governing grid (Source).
-    /// When the Source grid updates, the Target grid reacts accordingly.
+    /// Links a Standard Tilemap to a governing DualGridSystem.
     /// </summary>
     public class GridDependency : MonoBehaviour
     {
         [Header("Linkage")]
-        [Tooltip("The governing grid")]
+        [Tooltip("The governing grid (Mining Layer)")]
         [SerializeField] private DualGridSystem sourceGrid;
 
-        [Tooltip("The dependent grid")]
-        [SerializeField] private DualGridSystem targetGrid;
+        [Tooltip("The dependent standard tilemap (Decoration Layer)")]
+        [SerializeField] private Tilemap targetTilemap;
 
         [Header("Rules")]
-        [Tooltip("If the Source tile becomes Empty, clear the Target tile.")]
+        [Tooltip("If the Source tile becomes Empty, delete the decoration at that location.")]
         [SerializeField] private bool clearOnSourceEmpty = true;
 
         private void OnEnable()
@@ -37,13 +37,13 @@ namespace DigDigDiner
 
         private void OnSourceTileChanged(int x, int y, Tile newSourceTile)
         {
-            if (targetGrid == null) return;
+            if (targetTilemap == null) return;
 
             // Rule: Clear target if source becomes Empty
             if (clearOnSourceEmpty && newSourceTile.terrainType == TerrainType.Empty)
             {
-                // We set the target to Empty. 
-                targetGrid.SetTileAt(x, y, new Tile(TerrainType.Empty));
+                // Remove the tile from the standard Tilemap
+                targetTilemap.SetTile(new Vector3Int(x, y, 0), null);
             }
         }
     }

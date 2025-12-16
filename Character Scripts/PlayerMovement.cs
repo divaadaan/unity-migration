@@ -137,9 +137,6 @@ public class PlayerMovement : MonoBehaviour
         ProcessInventoryAdjustment();
 
 
-
-
-
         myAnimator.SetFloat("yVelocity", rb.linearVelocity.y);
         myAnimator.SetFloat("magnitude", Mathf.Abs(rb.linearVelocity.x) / inventoryAdjustedMaxSpeed);        
         myAnimator.SetBool("flip", Flipping);
@@ -197,10 +194,18 @@ public class PlayerMovement : MonoBehaviour
         }
     }
     
+    // REFACTORED METHOD: Updates sensor logic first, then calculates visuals separately
     private void ProcessDrillingMotion()
     {
+        // 1. LOGIC: Move the sensor BEFORE checking for walls
+        // This moves the invisible DrillSensor to the target tile 
+        // without affecting the visible Drill's position.
+        UpdateToolCheckPosition();
+
         float elapsedTime = Time.time - DrillstartTime;
         drillingT = Mathf.Clamp01(elapsedTime / duration);
+        
+        // ToolCheck() now checks the invisible DrillSensor's location
         if (isDrilling && ToolCheck() == true) 
         {
             Drilling = 1; 
@@ -210,6 +215,9 @@ public class PlayerMovement : MonoBehaviour
             Drilling = 0;
         }
         
+        // 2. VISUALS: Calculate the bounce/squash for the visible drill
+        // These calculations set 'Drillvector', which ToolScript reads.
+        // We do NOT modify toolCheckPos here, preserving the visual appearance.
         lerpDrill = Mathf.Lerp(initialDrill, Drilling, drillingT); // gradual drilling motion start
         if (drillingT >= 1f)
         {
@@ -232,9 +240,38 @@ public class PlayerMovement : MonoBehaviour
         {
             DrillposY = Mathf.Clamp01(verticalDirection) * lerpDrill * -musicBounce;
         }
-            Drillvector = new Vector2(DrillposX, DrillposY);
-         
+        
+        Drillvector = new Vector2(DrillposX, DrillposY);
     }
+
+    // NEW HELPER METHOD: Moves the invisible sensor to the correct grid edge
+    private void UpdateToolCheckPosition()
+    {
+        if (toolCheckPos == null) return;
+
+        // 0.85f ensures the sensor reaches past the 0.5 center point 
+        // into the adjacent grid cell (e.g., from 5.0 to 5.85, which rounds to 6).
+        float sensorOffset = 1.2f; 
+
+        if (verticalDirection < -0.1f)
+        {
+            // Aiming Down
+            toolCheckPos.localPosition = new Vector3(0, -sensorOffset, 0); 
+        }
+        else if (verticalDirection > 0.1f)
+        {
+            // Aiming Up
+            toolCheckPos.localPosition = new Vector3(0, sensorOffset, 0);
+        }
+        else
+        {
+            // Aiming Horizontal
+            // We always use positive X because the Player object itself 
+            // is flipped via Transform.localScale.x in the Flip() method.
+            toolCheckPos.localPosition = new Vector3(sensorOffset, 0, 0); 
+        }
+    }
+
     private void ProcessInventoryAdjustment()
     {
         if (inventory / carryStrength <= maxInventory)
@@ -535,4 +572,3 @@ public class PlayerMovement : MonoBehaviour
         }
     }
 }
-
