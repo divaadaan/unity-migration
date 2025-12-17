@@ -1,20 +1,18 @@
 using UnityEngine;
 using DigDigDiner;
 
-/// <summary>
-/// Handles player spawn positioning for the Character Scripts player system.
-/// Finds a valid Empty tile in the DualGridSystem and positions the player there.
-/// Waits for map generation to complete before spawning.
-/// </summary>
 public class PlayerSpawner : MonoBehaviour
 {
     [Header("References")]
     [SerializeField] private DualGridSystem gridSystem;
+    [SerializeField] private PlayerCamera playerCamera; 
+
+    [Header("Assets")]
+    [SerializeField] private GameObject playerPrefab; 
 
     [Header("Spawn Settings")]
     [SerializeField] private Vector2Int manualSpawnPosition = new Vector2Int(5, 5);
     [SerializeField] private bool autoFindSpawn = true;
-    [Tooltip("Search from top of map downward to find entrance area")]
     [SerializeField] private bool prioritizeTopOfMap = true;
 
     [Header("Debug")]
@@ -22,166 +20,100 @@ public class PlayerSpawner : MonoBehaviour
 
     private void Awake()
     {
-        // Auto-find grid system if not assigned
         if (gridSystem == null)
-        {
             gridSystem = FindFirstObjectByType<DualGridSystem>();
-            if (gridSystem == null)
-            {
-                Debug.LogError("PlayerSpawner: No DualGridSystem found in scene!");
-                enabled = false;
-                return;
-            }
-        }
+            
+        // Auto-find camera if missed
+        if (playerCamera == null)
+            playerCamera = FindFirstObjectByType<PlayerCamera>();
     }
 
     private void Start()
     {
-        // Wait one frame to ensure map generation completes
         StartCoroutine(SpawnAfterMapGeneration());
     }
 
     private System.Collections.IEnumerator SpawnAfterMapGeneration()
     {
-        // Wait for map generation to complete
         yield return new WaitForEndOfFrame();
 
-        if (logSpawnProcess)
-            Debug.Log($"PlayerSpawner: Starting spawn process. Grid size: {gridSystem.Width}x{gridSystem.Height}");
+        if (logSpawnProcess) Debug.Log($"PlayerSpawner: Finding spawn point...");
 
-        // Find valid spawn position
+        // 1. Find Position
         Vector2Int gridPosition;
         if (autoFindSpawn)
         {
             gridPosition = FindValidSpawnPosition();
-            if (logSpawnProcess)
-                Debug.Log($"PlayerSpawner: Auto-found spawn position: {gridPosition}");
         }
         else
         {
             gridPosition = manualSpawnPosition;
-            if (logSpawnProcess)
-                Debug.Log($"PlayerSpawner: Using manual spawn position: {gridPosition}");
         }
 
-        // Validate and fallback if needed
-        if (!IsValidSpawnPosition(gridPosition))
+        // 2. Instantiate Prefab
+        Vector3 spawnWorldPos = gridSystem.BaseGridToWorld(gridPosition);
+        GameObject newPlayer = Instantiate(playerPrefab, spawnWorldPos, Quaternion.identity);
+        newPlayer.name = "Player_Active";
+
+        if (logSpawnProcess) Debug.Log($"PlayerSpawner: Spawned {newPlayer.name} at {gridPosition}");
+
+        // 3. Link to Camera
+        if (playerCamera != null)
         {
-            Debug.LogWarning($"PlayerSpawner: Invalid spawn position {gridPosition}, searching for fallback...");
-            gridPosition = FindAnyValidPosition();
+            PlayerMovement mover = newPlayer.GetComponentInChildren<PlayerMovement>();
+
+            if (mover != null)
+            {
+                playerCamera.SetTarget(mover.transform); 
+                Debug.Log($"PlayerSpawner: Linked Camera to {mover.name}");
+            }
+            else
+            {
+                // Fallback if script is missing (tracks root)
+                playerCamera.SetTarget(newPlayer.transform);
+                Debug.LogWarning("PlayerSpawner: Could not find PlayerMovement script on prefab!");
+            }
         }
-
-        // Position player at spawn (grid coordinates = world coordinates)
-        Vector3 spawnWorldPos = new Vector3(gridPosition.x, gridPosition.y, 0);
-        transform.position = spawnWorldPos;
-
-        if (logSpawnProcess)
-            Debug.Log($"PlayerSpawner: Player spawned at grid {gridPosition}, world position {spawnWorldPos}");
+        else
+        {
+            Debug.LogError("PlayerSpawner: No PlayerCamera assigned!");
+        }
     }
 
-    /// <summary>
-    /// Finds the first valid Empty tile for spawning.
-    /// Prioritizes the entrance area at the top of the map.
-    /// </summary>
     private Vector2Int FindValidSpawnPosition()
     {
         if (prioritizeTopOfMap)
         {
             int centerX = gridSystem.Width / 2;
-
-            // Search from top of map downward (entrance area)
             for (int y = gridSystem.Height - 1; y >= 0; y--)
             {
-                // Check center column first (where entrance typically is)
-                // Expands outward: center, center+1, center-1
                 for (int xOffset = 0; xOffset < 3; xOffset++)
                 {
                     int x = centerX + (xOffset % 2 == 0 ? xOffset / 2 : -(xOffset / 2 + 1));
-
-                    if (x >= 0 && x < gridSystem.Width)
-                    {
-                        Vector2Int pos = new Vector2Int(x, y);
-                        if (IsValidSpawnPosition(pos))
-                        {
-                            if (logSpawnProcess)
-                                Debug.Log($"PlayerSpawner: Found spawn at entrance area: {pos}");
-                            return pos;
-                        }
-                    }
+                    if (x >= 0 && x < gridSystem.Width && IsValidSpawnPosition(new Vector2Int(x, y)))
+                        return new Vector2Int(x, y);
                 }
             }
         }
-
-        // Fallback: search entire grid
         return FindAnyValidPosition();
     }
 
-    /// <summary>
-    /// Searches entire grid from top to bottom for any valid spawn position.
-    /// </summary>
     private Vector2Int FindAnyValidPosition()
     {
         for (int y = gridSystem.Height - 1; y >= 0; y--)
         {
             for (int x = 0; x < gridSystem.Width; x++)
             {
-                Vector2Int pos = new Vector2Int(x, y);
-                if (IsValidSpawnPosition(pos))
-                {
-                    if (logSpawnProcess)
-                        Debug.Log($"PlayerSpawner: Found fallback spawn at {pos}");
-                    return pos;
-                }
+                if (IsValidSpawnPosition(new Vector2Int(x, y))) return new Vector2Int(x, y);
             }
         }
-
-        // Last resort: use center of map
-        int centerX = gridSystem.Width / 2;
-        int centerY = gridSystem.Height / 2;
-        Debug.LogWarning($"PlayerSpawner: No valid spawn found! Using center: ({centerX}, {centerY})");
-        return new Vector2Int(centerX, centerY);
+        return new Vector2Int(gridSystem.Width / 2, gridSystem.Height / 2);
     }
 
-    /// <summary>
-    /// Checks if a position is valid for spawning (must be Empty terrain).
-    /// </summary>
     private bool IsValidSpawnPosition(Vector2Int pos)
     {
-        // Check bounds
-        if (pos.x < 0 || pos.x >= gridSystem.Width ||
-            pos.y < 0 || pos.y >= gridSystem.Height)
-        {
-            return false;
-        }
-
-        // Check terrain type - can only spawn on Empty tiles
+        if (pos.x < 0 || pos.x >= gridSystem.Width || pos.y < 0 || pos.y >= gridSystem.Height) return false;
         var tile = gridSystem.GetTileAt(pos.x, pos.y);
         return tile != null && tile.terrainType == TerrainType.Empty;
     }
-
-#if UNITY_EDITOR
-    private void OnDrawGizmosSelected()
-    {
-        if (gridSystem == null || !Application.isPlaying)
-            return;
-
-        // Draw manual spawn position
-        if (!autoFindSpawn)
-        {
-            Gizmos.color = Color.green;
-            Vector3 spawnPos = new Vector3(manualSpawnPosition.x, manualSpawnPosition.y, 0);
-            Gizmos.DrawWireSphere(spawnPos, 0.5f);
-            Gizmos.DrawWireCube(spawnPos, Vector3.one * 0.8f);
-        }
-
-        // Draw current player position on grid
-        Vector2Int currentGridPos = new Vector2Int(
-            Mathf.RoundToInt(transform.position.x),
-            Mathf.RoundToInt(transform.position.y)
-        );
-        Gizmos.color = Color.cyan;
-        Vector3 gridWorldPos = new Vector3(currentGridPos.x, currentGridPos.y, 0);
-        Gizmos.DrawWireCube(gridWorldPos, Vector3.one * 0.9f);
-    }
-#endif
 }

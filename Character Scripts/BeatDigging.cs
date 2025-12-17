@@ -25,20 +25,45 @@ public class BeatDigging : MonoBehaviour
 
     private void Awake()
     {
-        // Auto-find references if not assigned
-        if (playerMovement == null)
-            playerMovement = GetComponent<PlayerMovement>();
+        // 1. Find PlayerMovement 
+        {
+            playerMovement = GetComponentInChildren<PlayerMovement>();
+            if (playerMovement == null) 
+                Debug.LogError("BeatDigging: Could not find PlayerMovement script on this object or children!");
+        }
 
+        // 2. Find the Mining Grid
         if (gridSystem == null)
-            gridSystem = FindFirstObjectByType<DualGridSystem>();
+        {
+            GameObject miningObject = GameObject.Find("MiningGameSystem");
+            if (miningObject != null)
+            {
+                gridSystem = miningObject.GetComponent<DualGridSystem>();
+            }
+            else
+            {
+                // Fallback 
+                Debug.LogError("BeatDigging: Could not find 'MiningGameSystem'. searching for ANY grid...");
+                gridSystem = FindFirstObjectByType<DualGridSystem>();
+            }
 
+            if (gridSystem == null)
+                Debug.LogError("BeatDigging: Critical Error - No Grid System found!");
+        }
+
+        // 3. Find Tool Position (Copy from PlayerMovement if we lost the reference)
         if (toolCheckPos == null && playerMovement != null)
+        {
             toolCheckPos = playerMovement.toolCheckPos;
+        }
 
+        // 4. Find Ground Layer (Copy from PlayerMovement)
         if (groundLayer == 0 && playerMovement != null)
+        {
             groundLayer = playerMovement.groundLayer;
+        }
 
-        // Calculate beat interval: 60 seconds / 130 BPM = 0.4615 seconds per beat
+        // Calculate beat interval
         beatInterval = 60f / BPM;
         nextBeatTime = Time.time + beatInterval;
     }
@@ -64,51 +89,38 @@ public class BeatDigging : MonoBehaviour
     /// Applies damage to the tile at the tool check position.
     /// </summary>
     private void ApplyDigDamage()
-    {
-        // Convert tool world position to grid coordinates
-        Vector2Int gridPos = WorldToGridPosition(toolCheckPos.position);
-
-        // Validate grid position
-        if (gridPos.x < 0 || gridPos.x >= gridSystem.Width ||
-            gridPos.y < 0 || gridPos.y >= gridSystem.Height)
         {
-            if (logDigEvents)
-                Debug.LogWarning($"BeatDigging: Tool position {toolCheckPos.position} is outside grid bounds");
-            return;
-        }
+            // 1. Convert tool world position to grid coordinates
+            Vector2Int gridPos = gridSystem.WorldToBaseGrid(toolCheckPos.position);
 
-        // Get the tile
-        Tile tile = gridSystem.GetTileAt(gridPos.x, gridPos.y);
+            // 2. Validate grid position 
+            if (gridPos.x < 0 || gridPos.x >= gridSystem.Width ||
+                gridPos.y < 0 || gridPos.y >= gridSystem.Height)
+            {
+                if (logDigEvents)
+                    Debug.LogWarning($"BeatDigging: Tool position {toolCheckPos.position} is outside grid bounds");
+                return;
+            }
 
-        if (tile == null || tile.terrainType != TerrainType.Diggable)
-            return;
+            Tile tile = gridSystem.GetTileAt(gridPos.x, gridPos.y);
+            if (tile == null || tile.terrainType != TerrainType.Diggable)
+                return;
 
-        // Apply damage
-        bool tileDestroyed = tile.TakeDamage(1);
-
-        if (logDigEvents)
-        {
-            Debug.Log($"BeatDigging: Hit tile at {gridPos}, HP: {tile.currentHitPoints}/{tile.maxHitPoints}");
-        }
-
-        // If tile destroyed, convert to Empty
-        if (tileDestroyed)
-        {
-            Tile emptyTile = new Tile(TerrainType.Empty);
-            gridSystem.SetTileAt(gridPos.x, gridPos.y, emptyTile);
+            bool tileDestroyed = tile.TakeDamage(1);
 
             if (logDigEvents)
-                Debug.Log($"BeatDigging: Destroyed tile at {gridPos}");
-        }
-    }
+            {
+                Debug.Log($"BeatDigging: Hit tile at {gridPos}, HP: {tile.currentHitPoints}/{tile.maxHitPoints}");
+            }
 
-    /// <summary>
-    /// Converts world position to grid coordinates (rounds to nearest integer).
-    /// </summary>
-    private Vector2Int WorldToGridPosition(Vector3 worldPos)
-    {
-        return new Vector2Int(Mathf.RoundToInt(worldPos.x), Mathf.RoundToInt(worldPos.y));
-    }
+            if (tileDestroyed)
+            {
+                gridSystem.SetTileAt(gridPos.x, gridPos.y, new Tile(TerrainType.Empty));
+
+                if (logDigEvents)
+                    Debug.Log($"BeatDigging: Destroyed tile at {gridPos}");
+            }
+        }
 
     /// <summary>
     /// Check if tool is colliding with ground layer.
@@ -124,16 +136,15 @@ public class BeatDigging : MonoBehaviour
     {
         if (!showDebugGizmos || toolCheckPos == null) return;
 
-        // Draw tool check area
         Gizmos.color = playerMovement != null && playerMovement.isDrilling ? Color.red : Color.yellow;
         Gizmos.DrawWireCube(toolCheckPos.position, new Vector3(0.25f, 0.25f, 1f));
 
-        // Draw grid position being targeted
-        if (playerMovement != null && playerMovement.isDrilling && ToolCheck())
+        if (gridSystem != null && playerMovement != null && playerMovement.isDrilling && ToolCheck())
         {
-            Vector2Int gridPos = WorldToGridPosition(toolCheckPos.position);
+            Vector2Int gridPos = gridSystem.WorldToBaseGrid(toolCheckPos.position);
+            Vector3 targetWorldPos = gridSystem.BaseGridToWorld(gridPos);
             Gizmos.color = Color.cyan;
-            Gizmos.DrawWireCube(new Vector3(gridPos.x, gridPos.y, 0), Vector3.one * 0.9f);
+            Gizmos.DrawWireCube(targetWorldPos, Vector3.one * 0.9f);
         }
     }
 #endif

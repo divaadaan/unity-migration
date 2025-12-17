@@ -242,12 +242,24 @@ namespace DigDigDiner
             Debug.Log($"Refreshed {(Width-1)}x{(Height-1)} visual tiles on {name}");
         }
 
+
+        /// <summary>
+        ///Since Unity tilemaps automatically visually center the grid at 0,0 we need these scripts to get the relative position of the centre of the map for player spawning
+        /// </summary>
         public Vector2Int WorldToBaseGrid(Vector3 worldPos)
         {
             if (colorTilemap == null) return Vector2Int.zero;
 
             Vector3Int visualCell = colorTilemap.WorldToCell(worldPos);
             return new Vector2Int(visualCell.x, visualCell.y);
+        }
+
+        public Vector3 BaseGridToWorld(Vector2Int gridPos)
+        {
+            if (colorTilemap == null) 
+                return new Vector3(gridPos.x, gridPos.y, 0); // Fallback
+
+            return colorTilemap.GetCellCenterWorld(new Vector3Int(gridPos.x, gridPos.y, 0));
         }
     }
 }
