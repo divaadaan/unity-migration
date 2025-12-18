@@ -11,8 +11,8 @@ public class PlayerSpawner : MonoBehaviour
     [SerializeField] private GameObject playerPrefab; 
 
     [Header("Spawn Settings")]
-    [SerializeField] private Vector2Int manualSpawnPosition = new Vector2Int(5, 5);
-    [SerializeField] private bool autoFindSpawn = true;
+    [SerializeField] private Vector2Int manualSpawnPosition = new Vector2Int(0, 30);
+    [SerializeField] private bool autoFindSpawn = false;
     [SerializeField] private bool prioritizeTopOfMap = true;
 
     [Header("Debug")]

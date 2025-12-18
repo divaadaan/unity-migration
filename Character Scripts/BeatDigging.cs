@@ -91,7 +91,10 @@ public class BeatDigging : MonoBehaviour
     private void ApplyDigDamage()
         {
             // 1. Convert tool world position to grid coordinates
-            Vector2Int gridPos = gridSystem.WorldToBaseGrid(toolCheckPos.position);
+            Vector2Int gridPos = new Vector2Int(
+                Mathf.RoundToInt(toolCheckPos.position.x), 
+                Mathf.RoundToInt(toolCheckPos.position.y)
+            );
 
             // 2. Validate grid position 
             if (gridPos.x < 0 || gridPos.x >= gridSystem.Width ||

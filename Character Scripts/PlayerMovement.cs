@@ -194,7 +194,6 @@ public class PlayerMovement : MonoBehaviour
         }
     }
     
-    // REFACTORED METHOD: Updates sensor logic first, then calculates visuals separately
     private void ProcessDrillingMotion()
     {
         // 1. LOGIC: Move the sensor BEFORE checking for walls
@@ -244,14 +243,11 @@ public class PlayerMovement : MonoBehaviour
         Drillvector = new Vector2(DrillposX, DrillposY);
     }
 
-    // NEW HELPER METHOD: Moves the invisible sensor to the correct grid edge
     private void UpdateToolCheckPosition()
     {
         if (toolCheckPos == null) return;
 
-        // 0.85f ensures the sensor reaches past the 0.5 center point 
-        // into the adjacent grid cell (e.g., from 5.0 to 5.85, which rounds to 6).
-        float sensorOffset = 1.2f; 
+        float sensorOffset = 0.85f; 
 
         if (verticalDirection < -0.1f)
         {
@@ -266,9 +262,7 @@ public class PlayerMovement : MonoBehaviour
         else
         {
             // Aiming Horizontal
-            // We always use positive X because the Player object itself 
-            // is flipped via Transform.localScale.x in the Flip() method.
-            toolCheckPos.localPosition = new Vector3(sensorOffset, 0, 0); 
+            toolCheckPos.localPosition = new Vector3(sensorOffset, 0.5f, 0); 
         }
     }
 
