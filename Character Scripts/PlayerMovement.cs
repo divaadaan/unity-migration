@@ -24,23 +24,23 @@ public class PlayerMovement : MonoBehaviour
 
 
     [Header("Movement")]
-    public float maxMoveSpeed = 7f; //could upgrade  
+    public float maxMoveSpeed = 4f; //could upgrade  
     public float horizontalDirection; // other scripts need access    float 
     float smoothtime = 0.3f;    
     float xMagnitude;
     float RotationMultiplier = 3f;
     public float verticalDirection; // other scripts need access
-    float currentxvelocity = 0;
+    float currentxvelocity = 0;    
     bool Flipping;
     float isFacingRight = 1f;
-    public float jumpPower = 5f; //could upgrade  
+    public float jumpPower = 3f; //could upgrade  
     int maxJumps = 1;
     int jumpsRemaining;
-    float baseGravity = 2f;
-    float maxFallSpeed = 18f;
+    float baseGravity = 1f;
+    float maxFallSpeed = 9f;
     float fallSpeedMultiplier = 2f;
-    float flyPower = 5f;
-    float flyGravity = 0.5f;
+    public float flyPower = 3f;
+    float flyGravity = 0.1f;
     public bool isFlying; // other scripts need access
     float startFly;
 
@@ -95,7 +95,8 @@ public class PlayerMovement : MonoBehaviour
     bool isTouchingWall;
     float aiming;
     public Transform toolCheckPos; //defined in inspector
-    Vector2 toolCheckSize = new Vector2(0.25f, 0.25f);
+    public Transform drillSensor;
+    public Vector2 toolCheckSize = new Vector2(0.25f, 0.25f);
 
     [Header("Customization")] // should probably be moved to a seperate script
     public int BaseColour = 1; //set default
@@ -124,12 +125,9 @@ public class PlayerMovement : MonoBehaviour
     // Update is called once per frame
     void Update()
     {
-        GroundCheck();
-        ProcessGravity();
-        ProcessXMovement();
+        GroundCheck();        
         WallPushCheck();
-        Flip();        
-        ProcessStretch();
+        Flip();         
         MusicBeat();
         Flying();
         ProcessDrillingMotion();
@@ -147,7 +145,13 @@ public class PlayerMovement : MonoBehaviour
         HeadMaterial.SetFloat("_Head_Colour", HeadColour);
 
     }
-   
+
+    void FixedUpdate() // AG Moved this stuff to fixed update to try and fix the camera jitter
+    {
+        ProcessStretch();
+        ProcessXMovement();
+        ProcessGravity();
+    }
 
     private void OnEnable()
     {
@@ -199,7 +203,7 @@ public class PlayerMovement : MonoBehaviour
         // 1. LOGIC: Move the sensor BEFORE checking for walls
         // This moves the invisible DrillSensor to the target tile 
         // without affecting the visible Drill's position.
-        UpdateToolCheckPosition();
+        UpdateDrillSensorPosition(); // AG - this is redundant ToolCheck already did this
 
         float elapsedTime = Time.time - DrillstartTime;
         drillingT = Mathf.Clamp01(elapsedTime / duration);
@@ -217,6 +221,8 @@ public class PlayerMovement : MonoBehaviour
         // 2. VISUALS: Calculate the bounce/squash for the visible drill
         // These calculations set 'Drillvector', which ToolScript reads.
         // We do NOT modify toolCheckPos here, preserving the visual appearance.
+
+        // AG   -it wasnt: the motion only happened inside the child not the parent  -- logic is now broken: drilling motion is always on when button pressed
         lerpDrill = Mathf.Lerp(initialDrill, Drilling, drillingT); // gradual drilling motion start
         if (drillingT >= 1f)
         {
@@ -243,26 +249,28 @@ public class PlayerMovement : MonoBehaviour
         Drillvector = new Vector2(DrillposX, DrillposY);
     }
 
-    private void UpdateToolCheckPosition()
+    private void UpdateDrillSensorPosition() //this process is redundant ToolCheck() did this already
     {
-        if (toolCheckPos == null) return;
+        if (drillSensor == null) return;
 
         float sensorOffset = 0.85f; 
 
         if (verticalDirection < -0.1f)
         {
             // Aiming Down
-            toolCheckPos.localPosition = new Vector3(0, -sensorOffset, 0); 
+            drillSensor.localPosition = new Vector3(0, -sensorOffset, 0); 
         }
         else if (verticalDirection > 0.1f)
         {
             // Aiming Up
-            toolCheckPos.localPosition = new Vector3(0, sensorOffset, 0);
+            drillSensor.localPosition = new Vector3(0, sensorOffset, 0);
         }
         else
         {
             // Aiming Horizontal
-            toolCheckPos.localPosition = new Vector3(sensorOffset, 0.5f, 0); 
+            // We always use positive X because the Player object itself 
+            // is flipped via Transform.localScale.x in the Flip() method.
+            drillSensor.localPosition = new Vector3(sensorOffset, 0, 0); 
         }
     }
 
@@ -313,8 +321,9 @@ public class PlayerMovement : MonoBehaviour
                 jumpsRemaining--;
             }
                 
-        }        
+        }
     }
+    
     private void ProcessStretch()
     {        
         if (isGrounded) //when grounded 
@@ -440,7 +449,9 @@ public class PlayerMovement : MonoBehaviour
                 else
                 {
                     isFlying = true;
-                    rb.gravityScale = -0.02f * flyGravity - flyGravity * inventoryAdjustment; //inverse gravity for flying             
+                    
+                    rb.gravityScale = -0.02f * flyGravity - flyGravity * inventoryAdjustment; //inverse gravity for flying
+                    
                 }
                 
             }
